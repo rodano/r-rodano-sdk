@@ -21,8 +21,28 @@ lintr::lint_dir()
 ```
 
 You can customize linting rules in the `.lintr` file.
-// ...existing code...
 
+## Code Styling
+
+This project uses the [`styler`](https://styler.r-lib.org/) package to automatically format and style R code according to the [tidyverse style guide](https://style.tidyverse.org/). `styler` ensures consistent code formatting across the entire codebase.
+
+### Getting Started with styler
+
+1. **Style all R files in the project:**
+   ```r
+   styler::style_dir()
+   ```
+
+2. **Style a specific file:**
+   ```r
+   styler::style_file("R/rodano_api_communication.R")
+   ```
+
+3. **Style the active file in RStudio:**
+   ```r
+   styler::style_active_file()
+   ```
+   
 ## Dependency Management with renv
 
 This project uses [`renv`](https://rstudio.github.io/renv/) to manage R package dependencies and ensure reproducible environments across different machines and users.
