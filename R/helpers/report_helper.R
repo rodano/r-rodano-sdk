@@ -1,3 +1,6 @@
+now <- Sys.Date()
+
+
 # Performs aggregate without throwing an error if input has 0 rows
 # Input: - 'dep_colnames': name (string) or array of names of columns to summarize by aggregate function
 #        - 'indep_colnames': name (string) or array of names of columns used as grouping variables
@@ -132,6 +135,21 @@ check_and_create_path <- function(dir_path) {
     dir.create(dir_path)
   }
 }
+
+# Constructs file name for report output
+# Input: - 'projectName': name of the project
+#        - 'report_type': type of report (e.g. 'data_validation', 'data_listing')
+#        - 'documentName': name of the report
+#        - 'extension': format of the output file
+#        - 'outDir': path where the report will be saved
+#        - (optional) 'outDate': date the output was computed. If NULL, "now" is used
+# Output: Complete file name including path, composed of projectname, report_type, documentName, today's date and extension
+build_output_filename <- function(projectName, report_type, documentName, extension, outDir = dir.output, outDate = now) {
+  name <- paste(projectName, documentName, format(outDate, format = "%Y-%m-%d"), sep = "_")
+  name <- paste(sprintf("%s/%s", outDir, name), extension, sep = ".")
+  return(name)
+}
+
 
 # Retrieves event closest to target date 'targetDate' (type: Date).
 # Selects only event between [targetDate - offset; targetDate + offset] if specified.
