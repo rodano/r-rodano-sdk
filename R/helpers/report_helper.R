@@ -282,6 +282,163 @@ shift <- function(x, i = 1) {
   return(x[c((n - i + 1):n, 1:(n - i))])
 }
 
+print_table_to_csv <- function(project_name, report_type, tableresult, check_id, previous_report_folder, out_date = out_date, output_path = output_path) {
+  if (nrow(tableresult) > 0) {
+    tableresult$check_id <- check_id # include md5 for check id
+    tableresult$id <- md5(apply(tableresult, 1, paste, collapse = "")) # id unique for each entry of each check
+    # TODO: change ID system so that there will be a match if the columns are variable... maybe also filter results on update time...
+
+    tableresult <- tableresult[, c(ncol(tableresult), 1:(ncol(tableresult) - 2))] # Place row id at the begining and remove check id
+    tableresult <- tableresult[order(tableresult[, 2], tableresult[, 1]), ] # Order first by patient code then by row id
+
+    # Compare with previous result, if any
+    tableresult$resolved <- rep(FALSE, nrow(tableresult)) # Suppose all findings are new, for now
+    tableresult$comment <- rep("", nrow(tableresult)) # Set empty comments, for now
+
+    filename_previous <- build_output_filename(project_name, report_type, check_id, "csv", previous_report_folder$folder_path, previous_report_folder$date) # Get path to previous results
+    if (file.exists(filename_previous)) { # Check if there was any prior findings file
+      tableresult_previous <- read.csv(filename_previous)
+      # Was this finding resolved in the past already?
+      # Where result is found in previous result, retrieve its previous 'resolved' value.
+      # (Note: sort = FALSE ensures output of merge has same order as dataframe 'x' (i.e. tableresult) so that replacement will be made in the correct rows)
+      tableresult[
+        tableresult$id %in% tableresult_previous$id,
+        c("resolved", "comment")
+      ] <- merge(
+        x = tableresult,
+        y = tableresult_previous,
+        all = FALSE,
+        by = "id",
+        sort = FALSE
+      )[, c("resolved.y", "comment.y")]
+    }
+
+    filename <- build_output_filename(projectName = project_name, report_type = report_type, documentName = check_id, extension = "csv", outDate = out_date, outDir = output_path)
+
+    write.csv(x = tableresult, file = filename, row.names = FALSE, na = "") # Print result as csv table
+    return(tableresult)
+  }
+}
+
+
+report_findings <- function(project_name, report_name, results, out_date = today) {
+  # build (and create) output folder
+  output_path <- sprintf("%s/%s", dir.output, paste(out_date, report_name, sep = "_"))
+  check_and_create_path(output_path)
+
+  # get previous reports
+  previous_report_folder <- get_previous_report_folder(project_name, report_name)
+
+  # iterate over list of check results
+  summary_results <- do.call(
+    rbind.data.frame,
+    lapply(results, function(result) {
+      # write findings
+      tmpdf <- print_table_to_csv(
+        project_name = project_name,
+        tableresult = result[["table_result"]],
+        check_id = result[["check_id"]],
+        previous_report_folder = previous_report_folder,
+        out_date = out_date,
+        output_path = output_path
+      )
+      # build summary df
+      return(list(
+        check_id = result[["check_id"]], description = result[["description"]],
+        observations = ifelse(is.null(tmpdf), 0, nrow(tmpdf)),
+        unresolved_issues = ifelse(is.null(tmpdf), 0, nrow(tmpdf[!as.logical(tmpdf$resolved), ]))
+      ))
+    })
+  )
+  # compare with previous summary, if any
+  previous_report_folder <- get_previous_report_folder(project_name, report_name)
+  latest_summary <- build_output_filename(
+    projectName = project_name,
+    report_type = report_name,
+    outDir = previous_report_folder$folder_path,
+    documentName = sprintf("%s_summary", report_name),
+    extension = "csv",
+    outDate = previous_report_folder$date
+  )
+
+  if (
+    file.exists(latest_summary)
+  ) {
+    # read previous summary
+    previous_summary <- read.csv(latest_summary, stringsAsFactors = FALSE)
+    # merge with current summary
+    summary_results <- merge(
+      x = summary_results,
+      y = previous_summary[
+        , # do not want column description
+        c("check_id", "observations", "unresolved_issues")
+      ],
+      by = "check_id",
+      all.x = TRUE,
+      suffixes = c("", paste("_", previous_report_folder$date))
+    )
+    # compute changes
+    summary_results$observations_change <- summary_results$observations - summary_results[, paste("observations_", previous_report_folder$date)]
+    summary_results$unresolved_issues_change <- summary_results$unresolved_issues - summary_results[, paste("unresolved_issues_", previous_report_folder$date)]
+  } else {
+    # no previous summary, set changes to 0
+    summary_results$observations_change <- 0
+    summary_results$unresolved_issues_change <- 0
+  }
+
+  # write summary results
+  write.table(
+    x = summary_results,
+    file = build_output_filename(
+      projectName = project_name,
+      report_type = report_name,
+      outDir = output_path,
+      documentName = sprintf("%s_summary", report_name),
+      extension = "csv",
+      outDate = out_date
+    ),
+    sep = ",",
+    row.names = FALSE
+  )
+}
+
+# Retrieves the path of the latest report folder given project name and report_type
+# Input: - 'projectName': name of the project
+#        - 'report_name': type of report (e.g. 'data_validation', 'data_listing')
+#        - 'out_date': date of current report. Only folders created before this date will be considered.
+get_previous_report_folder <- function(projectname, report_name, out_date = today) {
+  # pattern_file <- sprintf("%s_%s_summary.*\\.csv", projectname, document_name)
+  files <- list.dirs(dir.output, full.names = TRUE, recursive = FALSE)
+  date_pattern <- "\\d{4}-\\d{2}-\\d{2}"
+
+  # Extract date from each folder name using the pattern
+  folder_dates <- sapply(basename(files), function(x) {
+    m <- regmatches(x, regexpr(date_pattern, x))
+    if (length(m) == 0) {
+      return(NA)
+    }
+    return(m)
+  })
+
+  # Convert to Date and filter by report_name and before out_date
+  valid_idx <- !is.na(folder_dates) & grepl(report_name, basename(files)) & as.Date(folder_dates) < as.Date(out_date)
+  if (!any(valid_idx)) {
+    return(NULL)
+  }
+
+  # Find the most recent folder by date
+  latest_idx <- which.max(as.Date(folder_dates[valid_idx]))
+  previous_folder_path <- files[valid_idx][latest_idx]
+  extracted_date <- folder_dates[valid_idx][latest_idx]
+
+
+  return(list(
+    folder_path = previous_folder_path,
+    files_path = list.files(previous_folder_path, full.names = TRUE, recursive = FALSE),
+    date = extracted_date
+  ))
+}
+
 # Checks if two periods p1 and o2 overlap given their start dates start_p1 and start_p2
 # and end date end_p2, with start_p1 <= start_p2.
 # If an end date is NA, the period is considered ongoing.
@@ -316,4 +473,78 @@ add_parent_scope <- function(transfers,
   # Move last  into first position
   df <- df[, c(ncol(df), 1:(ncol(df) - 1))]
   return(df)
+}
+
+############################################################################
+# Reports findings to Excel workbook with each check as a separate sheet
+# Reads previous Excel report to compare with current report
+report_metrics_diff_excel <- function(project_name, report_name, results, out_date = today, date_previous_report = NULL) {
+  # read the previous report
+  previous_report <- build_output_filename(
+    projectName = project_name,
+    report_type = report_name,
+    outDir = dir.output,
+    documentName = report_name,
+    extension = "xlsx",
+    outDate = date_previous_report
+  )
+  # try to read the previous report, if it doesn't exists return results as is
+  if (!file.exists(previous_report)) {
+    return(results)
+  }
+
+  # go through the sheets and compare with previous report
+  out <- lapply(names(results), function(result_name) {
+    # name of the element in list results
+    df <- results[[result_name]]
+    if (file.exists(previous_report)) {
+      df_prev <- readxl::read_xlsx(path = previous_report, sheet = result_name)
+    } else {
+      df_prev <- data.frame()
+    }
+    if (!is.null(df_prev) && nrow(df_prev) > 0) {
+      # compare resolved status
+      # create unique id for each row
+      # remove the column with name N if exists
+      if ("N" %in% colnames(df)) {
+        # dftmp <- as.data.frame(df[, !colnames(df) %in% "N"])
+        # df_prevtmp <- as.data.frame(df[, !colnames(df) %in% "N"])
+        if (ncol(df) < 3) {
+          df[, "dummy"] <- 1
+        }
+        if (ncol(df_prev) < 3) {
+          df_prev[, "dummy"] <- 1
+        }
+
+        df$id <- openssl::md5(apply(df[, !colnames(df) %in% "N"], 1, paste, collapse = ""))
+        df_prev$id <- openssl::md5(apply(df_prev[, !colnames(df_prev) %in% "N"], 1, paste, collapse = ""))
+        merged_df <- merge(
+          x = df,
+          y = df_prev,
+          all = TRUE,
+          by = c("id"),
+          sort = FALSE,
+          suffixes = c("", ".prev")
+        )
+
+        # Calculate the difference in counts
+        merged_df$diff <- ifelse(is.na(merged_df$N.prev), merged_df$N, merged_df$N - merged_df$N.prev)
+
+        merged_df[, "id"] <- NULL
+        merged_df[, "dummy"] <- NULL
+        # Remove any previous .prev columns
+        merged_df <- merged_df[, !grepl("\\.prev$", colnames(merged_df))]
+
+        # set the name of the diff column
+        colnames(merged_df)[colnames(merged_df) == "diff"] <- paste("Difference since", date_previous_report)
+        return(merged_df)
+      } else {
+        return(df)
+      }
+    } else {
+    }
+  })
+  # set the names of the output list
+  names(out) <- names(results)
+  return(out)
 }
