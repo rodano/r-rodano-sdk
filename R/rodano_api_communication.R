@@ -570,6 +570,72 @@ get_events <- function(urlBase, auth, maxAttempts = 5, scopeModelId = "PATIENT")
 }
 
 ##############################
+### Batch retrieval of     ###
+### extracts and reports   ###
+##############################
+# 'get_extracts': function that retrieves multiple datasets from server
+# Input : 'auth' - the user's authentication object
+#         'tableIds' - vector of dataset model IDs to retrieve
+#         'includeModifDate' - boolean indicating whether to include modification dates
+# Output: returns a named list of dataframes containing the datasets
+get_extracts <- function(auth, tableIds, includeModifDate){
+  # Get all exports
+  data <- lapply(tableIds, function(datasetId){
+    tempdf <- getExtract(STUDYURL, auth, datasetId, includeModifDate = includeModifDate, guessMax = 5)
+    return (tempdf)
+  })
+  # Format and return the list
+  names(data) <- tolower(tableIds)
+  return (data)
+}
+
+# 'get_reports': function that retrieves multiple workflow reports from server
+# Input : 'auth' - the user's authentication object
+#         'reportIds' - vector of workflow report names to retrieve
+#         'withHistory' - boolean indicating whether to include historical data
+# Output: returns a named list of dataframes containing the workflow reports
+get_reports <-function(auth, reportIds, withHistory) {
+  # Get all workflow reports
+  reports <- lapply(reportIds, function(reportName){
+    tempdf <- getReport(STUDYURL, auth, reportName, withHistory)
+    return (tempdf)
+  })
+  # Format and return the list
+  names(reports) <- tolower(reportIds)
+  return(reports)
+}
+
+# 'get_widget_reports': function that retrieves multiple widget reports from server
+# Input : 'auth' - the user's authentication object
+#         'widgetIds' - vector of widget names to retrieve
+# Output: returns a named list of dataframes containing the widget reports
+get_widget_reports <-function(auth, widgetIds) {
+  # Get all widget reports
+  widgetReports <- lapply(widgetIds, function(reportName){
+    tempdf <- getWidget(STUDYURL, auth, reportName)
+    return (tempdf)
+  })
+  # Format and return the list
+  names(widgetReports) <- tolower(widgetIds)
+  return(widgetReports)
+}
+
+# 'get_overdue_widget_reports': function that retrieves multiple overdue widget reports from server
+# Input : 'auth' - the user's authentication object
+#         'widgetIds' - vector of overdue widget names to retrieve
+# Output: returns a named list of dataframes containing the overdue widget reports
+get_overdue_widget_reports <-function(auth, widgetIds) {
+  # Get all overdue widget reports
+  overduewidgetReports <- lapply(widgetIds, function(reportName){
+    tempdf <- getOverdueWidget(STUDYURL, auth, reportName)
+    return (tempdf)
+  })
+  # Format and return the list
+  names(overduewidgetReports) <- tolower(widgetIds)
+  return(overduewidgetReports)
+}
+
+##############################
 ### Data / metadata update ###
 ##############################
 
