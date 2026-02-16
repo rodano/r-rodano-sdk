@@ -581,7 +581,7 @@ get_events <- function(urlBase, auth, maxAttempts = 5, scopeModelId = "PATIENT")
 get_extracts <- function(auth, tableIds, includeModifDate){
   # Get all exports
   data <- lapply(tableIds, function(datasetId){
-    tempdf <- getExtract(STUDYURL, auth, datasetId, includeModifDate = includeModifDate, guessMax = 5)
+    tempdf <- get_extract(STUDYURL, auth, datasetId, includeModifDate = includeModifDate, guessMax = 5)
     return (tempdf)
   })
   # Format and return the list
@@ -597,7 +597,7 @@ get_extracts <- function(auth, tableIds, includeModifDate){
 get_reports <-function(auth, reportIds, withHistory) {
   # Get all workflow reports
   reports <- lapply(reportIds, function(reportName){
-    tempdf <- getReport(STUDYURL, auth, reportName, withHistory)
+    tempdf <- get_report(STUDYURL, auth, reportName, withHistory)
     return (tempdf)
   })
   # Format and return the list
@@ -612,7 +612,7 @@ get_reports <-function(auth, reportIds, withHistory) {
 get_widget_reports <-function(auth, widgetIds) {
   # Get all widget reports
   widgetReports <- lapply(widgetIds, function(reportName){
-    tempdf <- getWidget(STUDYURL, auth, reportName)
+    tempdf <- get_widget(STUDYURL, auth, reportName)
     return (tempdf)
   })
   # Format and return the list
@@ -627,7 +627,7 @@ get_widget_reports <-function(auth, widgetIds) {
 get_overdue_widget_reports <-function(auth, widgetIds) {
   # Get all overdue widget reports
   overduewidgetReports <- lapply(widgetIds, function(reportName){
-    tempdf <- getOverdueWidget(STUDYURL, auth, reportName)
+    tempdf <- get_overdue_widget(STUDYURL, auth, reportName)
     return (tempdf)
   })
   # Format and return the list
