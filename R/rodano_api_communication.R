@@ -22,7 +22,6 @@ get_connection_token <- function(urlBase, email = NULL, pwd = NULL) {
     body = list(email = email, password = pwd),
     encode = "json"
   )
-
   if (resp$status_code == 201) {
     token <- as.character(content(resp)$token)
   } else {
@@ -323,13 +322,15 @@ add_scope <- function(code, name, model, parentPk, urlBase, auth, criteria = NUL
 #                       Positive integer (e.g., 100, 1000, 5000) - Explicitly specifies the number of rows to scan for type inference. More rows = more accurate type detection but slower parsing.
 #                       -1 - Scans all rows in the file for type inference. Provides the most accurate type detection but can be slow for large files.
 #        'includeModifDate' - should export include modification date of fields?
+#        'scopePk' - optional scope primary key to filter the extract
 # Output: the csv extract as a data.frame
-get_extract <- function(urlBase, auth, expName, maxAttempts = 5, guessMax = 0, includeModifDate = FALSE) {
+get_extract <- function(urlBase, auth, expName, maxAttempts = 5, guessMax = 0, includeModifDate = FALSE, scopePk = NULL) {
   expAddress <- sprintf(
-    "%s/extracts?datasetModelIds=%s%s",
+    "%s/extracts?datasetModelIds=%s%s%s",
     urlBase,
     expName,
-    ifelse(includeModifDate, "&withModificationDates=true", "")
+    ifelse(includeModifDate, "&withModificationDates=true", ""),
+    ifelse(!is.null(scopePk), sprintf("&scopePk=%s", scopePk), "")
   )
 
   # Try max. [maxAttempts] times to retrieve requested extract
