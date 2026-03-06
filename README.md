@@ -8,6 +8,58 @@ This project provides an R SDK for interacting with the Rodano API. It includes 
 - **Data Management:** Write or remove data using the Rodano fine-grained rights API, ensuring secure and controlled access.
 - **Workflow Management:** Manage and automate workflows within the Rodano environment.
 
+## Installation
+
+### From Source
+
+You can install the development version of the package from this repository:
+
+```r
+# Install devtools if not already installed
+if (!requireNamespace("devtools", quietly = TRUE)) {
+  install.packages("devtools")
+}
+
+# Install the rodano package from source
+devtools::install_local("path/to/r-rodano-sdk")
+
+# Or if cloning from a Git repository:
+devtools::install_git("https://github.com/rodano/r-rodano-sdk.git")
+```
+
+### Using renv (Recommended for Development)
+
+If you're contributing to the package or want a reproducible environment:
+
+```r
+# Clone the repository
+# git clone https://github.com/rodano/r-rodano-sdk.git
+# cd r-rodano-sdk
+
+# Open R in the project directory and restore dependencies
+renv::restore()
+```
+
+### Quick Start
+
+After installation, load the package and connect to the Rodano API:
+
+```r
+library(rodano)
+
+# Get authentication token
+token <- get_connection_token("https://study.rodano.ch/api", "your.email@example.com")
+
+# Create authentication object
+auth <- create_authentication(list(Token = token))
+
+# Get configuration
+config <- get_config("https://study.rodano.ch/api", auth)
+
+# Retrieve data extracts
+data <- get_extract("https://study.rodano.ch/api", auth, "extract_name")
+```
+
 ## Login Management
 
 The SDK provides secure authentication methods to connect to the Rodano platform. It supports user login, session management, and token-based authentication to ensure that only authorized users can access and modify data.

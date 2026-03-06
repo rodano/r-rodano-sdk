@@ -1,0 +1,10 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.git$
+^\.gitignore$
+^\.lintr$
+^renv$
+^renv\.lock$
+^\.Rprofile$
+^README\.md$
+^LICENSE\.md$
