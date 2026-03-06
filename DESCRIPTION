@@ -2,7 +2,7 @@ Package: rodano
 Type: Package
 Title: R SDK for Rodano API
 Version: 1.0.0
-Authors@R: person("Jonathan Salfati", email = "jonathan.salfati@gmail.com", role = c("aut"))
+Authors@R: person("Jonathan Salfati", email = "jonathan.salfati@gmail.com", role = c("aut", "cre"))
 Description: Provides an R SDK for interacting with the Rodano API. It includes 
     helper functions, communication utilities, and test scripts to facilitate 
     integration with the Rodano platform. Features include data export, data 
