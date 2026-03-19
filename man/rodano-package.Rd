@@ -39,7 +39,7 @@
 \references{
   \url{https://github.com/rodano/r-rodano-sdk}
 }
-\keyword{ package }
+\keyword{package}
 \seealso{
   \code{\link{check_and_create_path}}
 }
