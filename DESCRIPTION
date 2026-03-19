@@ -23,7 +23,8 @@ Suggests:
     testthat,
     lintr,
     styler,
-    devtools
+    devtools,
+    readxl
 RoxygenNote: 7.2.0
 URL: https://github.com/rodano/r-rodano-sdk
 BugReports: https://github.com/rodano/r-rodano-sdk/issues
