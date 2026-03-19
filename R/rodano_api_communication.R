@@ -1,51 +1,70 @@
 ########## Communication with Rodano's API ##########
-
-library("httr")
-library("pbapply")
-library("uuid")
+#' @importFrom httr POST GET PUT DELETE content add_headers http_status authenticate
+#' @importFrom pbapply pbapply pbmapply pbsapply pboptions
+#' @importFrom uuid UUIDgenerate
+#' @importFrom getPass getPass
+NULL
 
 #############################
 ### Connection and robots ###
 #############################
 
-# 'get_connection_token': Retrieves a token for a given platform with specific credentials
-# Input: 'urlBase' - the url to the platform's API
-#        'email' (optional) - the e-mail used for login
-#        'pwd' (optional) - the password used for login
-# Output: a token character string
+#' Retrieve authentication token
+#'
+#' Retrieves an authentication token for a given platform using specific
+#' credentials. Prompts for email and password if not provided.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param email Character or NULL. The email used for login. If NULL,
+#'   prompts the user for input.
+#' @param pwd Character or NULL. The password used for login. If NULL,
+#'   prompts the user for secure input.
+#'
+#' @return A character string containing the authentication token.
+#'
+#' @export
 get_connection_token <- function(urlBase, email = NULL, pwd = NULL) {
   if (is.null(email)) email <- readline(prompt = "Please enter e-mail: ")
   if (is.null(pwd)) pwd <- getPass::getPass(msg = "Enter password: ")
 
-  resp <- POST(
+  resp <- httr::POST(
     url = sprintf("%s/sessions", urlBase),
     body = list(email = email, password = pwd),
     encode = "json"
   )
   if (resp$status_code == 201) {
-    token <- as.character(content(resp)$token)
+    token <- as.character(httr::content(resp)$token)
   } else {
     stop(sprintf("Failed to login %s. Please check your credentials.", email), call. = FALSE)
   }
   return(token)
 }
 
-# 'get_connection_robot': Retrieves a robot from a given platform
-# If desired robot is ambiguous, user will be prompted to select robot from a list
-# Input: 'urlBase' - the url to the platform's API
-#        'token' - the token of a user enabled to view robots
-#        'role' (optional) - id of the role wanted for the robot to be retrieved
-#        'autoLogout' (optional) - if TRUE, logs out user used for robot retrieval
-# Output: A json robot object
+#' Retrieve robot credentials
+#'
+#' Retrieves a robot account from a given platform. If multiple robots are
+#' available or if the desired robot is ambiguous, the user will be prompted
+#' to select from a list.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param token Character. Authentication token of a user enabled to view robots.
+#' @param role Character or NULL. ID of the role wanted for the robot. If NULL,
+#'   all robot roles are considered.
+#' @param autoLogout Logical. If TRUE, logs out the user used for robot
+#'   retrieval (default: FALSE).
+#'
+#' @return A JSON robot object containing robot credentials and configuration.
+#'
+#' @export
 get_connection_robot <- function(urlBase, token, role = NULL, autoLogout = FALSE) {
   a_ <- create_authentication(list(Token = token))
-  resp <- GET(
+  resp <- httr::GET(
     url = sprintf("%s/robots", urlBase),
     config = a_
   )
   if (autoLogout) logout_user(urlBase, a_)
   if (resp$status_code == 200) {
-    robots <- content(resp, type = "application/json", encoding = "UTF-8")$objects # Get list of existing robots
+    robots <- httr::content(resp, type = "application/json", encoding = "UTF-8")$objects # Get list of existing robots
     robots <- robots[sapply(robots, function(r) !r$removed)] # Retain only enabled robots
     if (!is.null(role)) robots <- robots[sapply(robots, function(r) r$roles[[1]]$profileId == role)] # Retain requested role
 
@@ -62,7 +81,7 @@ get_connection_robot <- function(urlBase, token, role = NULL, autoLogout = FALSE
       )
 
       r_idx <- 0
-      while (r_idx <= 0 | r_idx > length(robots)) {
+      while (r_idx <= 0 || r_idx > length(robots)) {
         r_idx <- as.numeric(readline())
         if (r_idx > length(robots)) print(sprintf("Max. number of robots is %i.", length(robots)))
       }
@@ -76,12 +95,22 @@ get_connection_robot <- function(urlBase, token, role = NULL, autoLogout = FALSE
   stop(sprintf("Robots could not be retrieved from %s.", urlBase))
 }
 
-# 'create_authentication': Creates an authentication object
-# Input: 'opt' - a row of options with columns informing about Username and Password (for robots) or Token (for registered user)
-# Output: an authentication object
+
+
+#' Create authentication object
+#'
+#' Creates an authentication object for API requests. Accepts either a token
+#' (for robots) or username/password combination (for registered users).
+#'
+#' @param opt A list or named vector containing authentication credentials.
+#'   Must include either \code{Token} or both \code{Username} and \code{Password}.
+#'
+#' @return An authentication configuration object for use with httr.
+#'
+#' @export
 create_authentication <- function(opt) {
   if ("Token" %in% names(opt)) {
-    return(add_headers(Authorization = sprintf("Bearer %s", opt$Token)))
+    return(httr::add_headers(Authorization = sprintf("Bearer %s", opt$Token)))
   } else if (all(c("Username", "Password") %in% names(opt))) {
     return(authenticate(opt$Username, opt$Password, type = "basic"))
   } else {
@@ -89,19 +118,27 @@ create_authentication <- function(opt) {
   }
 }
 
-# 'get_connected_user_dto': Retrieves the User DTO from connected user
-# Input: 'urlBase' - the url to the platform's API
-#        'auth' - the user's authentication object
-# Output: a User DTO object
+#' Retrieve connected user information
+#'
+#' Retrieves the User Data Transfer Object (DTO) for the currently
+#' authenticated user.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#'
+#' @return A User DTO object containing user information and permissions.
+#'
+#' @keywords internal
+#' @noRd
 get_connected_user_dto <- function(urlBase, auth) {
-  resp <- GET(
+  resp <- httr::GET(
     url = sprintf("%s/me", urlBase),
     config = auth,
     encode = "json"
   )
 
   if (resp$status_code == 200) {
-    userDTO <- content(resp,
+    userDTO <- httr::content(resp,
       encoding = "UTF-8"
     )
   } else {
@@ -111,11 +148,19 @@ get_connected_user_dto <- function(urlBase, auth) {
   return(userDTO)
 }
 
-# 'logout_user': Deletes a user's session on a given platform
-# Input : 'urlBase' - the url to the platform's API
-#         'auth' - the user's authentication object
+#' Log out user session
+#'
+#' Deletes a user's session on the platform, invalidating the current
+#' authentication token.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#'
+#' @return Called for its side effect. Throws an error if logout fails.
+#'
+#' @export
 logout_user <- function(urlBase, auth) {
-  resp <- DELETE(
+  resp <- httr::DELETE(
     url = sprintf("%s/sessions", urlBase),
     config = auth
   )
@@ -127,21 +172,29 @@ logout_user <- function(urlBase, auth) {
 ### Study configuration ###
 ############################
 
-# 'get_config': extracts a study's whole configuration out of a GET response
-# Input: 'urlBase' - the url to platform's API
-#        'auth' - an authentication object
-#        'maxAttempts' - maximum number of times to try to get resource in case of failure
-# Output: the study's configuration shaped as a nested list
+#' Retrieve study configuration
+#'
+#' Extracts the complete study configuration from the platform. Includes
+#' retry logic to handle temporary failures.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param maxAttempts Integer. Maximum number of retry attempts in case of
+#'   failure (default: 5).
+#'
+#' @return A nested list containing the study's configuration settings.
+#'
+#' @export
 get_config <- function(urlBase, auth, maxAttempts = 5) {
   cfgAddress <- sprintf("%s/config/study", urlBase)
 
   # Try max. [maxAttempts] times to retrieve requested report
   attempts <- 0
   success <- FALSE
-  while (attempts < maxAttempts & !success) {
+  while (attempts < maxAttempts && !success) {
     getRes <- tryCatch(
       {
-        GET(
+        httr::GET(
           url = cfgAddress,
           config = auth
         )
@@ -157,7 +210,7 @@ get_config <- function(urlBase, auth, maxAttempts = 5) {
 
   # Throw error if still unsuccessful; extract content otherwise
   if (getRes$status_code != 200) stop(sprintf("Configuration retrieval at: %s failed after %i attempts.", cfgAddress, maxAttempts))
-  cont <- content(getRes,
+  cont <- httr::content(getRes,
     type = "application/json",
     encoding = "UTF-8"
   )
@@ -165,20 +218,28 @@ get_config <- function(urlBase, auth, maxAttempts = 5) {
   return(cont)
 }
 
-# 'get_public_config': extracts a study's public configuration out of a GET response
-# Input: 'urlBase' - the url to platform's API
-#        'maxAttempts' - maximum number of times to try to get resource in case of failure
-# Output: the study's configuration shaped as a nested list
+#' Retrieve public study configuration
+#'
+#' Extracts the public study configuration from the platform. This endpoint
+#' does not require authentication and includes retry logic for reliability.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param maxAttempts Integer. Maximum number of retry attempts in case of
+#'   failure (default: 5).
+#'
+#' @return A nested list containing the study's public configuration settings.
+#'
+#' @export
 get_public_config <- function(urlBase, maxAttempts = 5) {
   cfgAddress <- sprintf("%s/config/public-study", urlBase)
 
   # Try max. [maxAttempts] times to retrieve requested report
   attempts <- 0
   success <- FALSE
-  while (attempts < maxAttempts & !success) {
+  while (attempts < maxAttempts && !success) {
     getRes <- tryCatch(
       {
-        GET(url = cfgAddress)
+        httr::GET(url = cfgAddress)
       },
       error = function(e) print(sprintf("Configuration retrieval at: %s failed. %s", cfgAddress, e))
     )
@@ -191,7 +252,7 @@ get_public_config <- function(urlBase, maxAttempts = 5) {
 
   # Throw error if still unsuccessful; extract content otherwise
   if (getRes$status_code != 200) stop(sprintf("Configuration retrieval at: %s failed after %i attempts.", cfgAddress, maxAttempts))
-  cont <- content(getRes,
+  cont <- httr::content(getRes,
     type = "application/json",
     encoding = "UTF-8"
   )
@@ -203,21 +264,28 @@ get_public_config <- function(urlBase, maxAttempts = 5) {
 ### Users and scopes ###
 ########################
 
-# 'add_user': sends POST requests to create a new user
-# Input: 'name' - name of user
-#        'email' - email of user
-#        'profile' - profile to assign
-#        'parentPk' - pk of parent to attach new scope
-#        'urlBase' - the url to platform's API
-#        'auth' - an authentication object
-#        'activate' (optional) - boolean indicating whether user must be enabled or not.
-#                                FALSE by default
-#        'pwd' (optional) - password of user.
-#                           When NULL (default), no password is set and user is not automatically enabled.
-# Output: parsed response content from user creation's POST request
+#' Create new user
+#'
+#' Creates a new user in the platform. Optionally activates the user
+#' account if password is provided.
+#'
+#' @param name Character. Name of the user.
+#' @param email Character. Email address of the user.
+#' @param profile Character. Profile ID to assign to the user.
+#' @param parentPk Integer. Primary key of the parent scope to attach the user to.
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param activate Logical. Whether the user must be enabled immediately
+#'   (default: FALSE).
+#' @param pwd Character or NULL. Password for the user. When NULL (default),
+#'   no password is set and user is not automatically enabled.
+#'
+#' @return Parsed response content from user creation request.
+#'
+#' @export
 add_user <- function(name, email, profile, parentPk, urlBase, auth, activate = FALSE, pwd = NULL) {
   # Create user
-  r_ <- POST(
+  r_ <- httr::POST(
     url = sprintf("%s/users", urlBase),
     body = list(
       name = name, email = email,
@@ -228,19 +296,19 @@ add_user <- function(name, email, profile, parentPk, urlBase, auth, activate = F
     encode = c("json")
   )
   if (r_$status_code != 201) stop("Unable to create user")
-  u <- content(r_, "parsed")
+  u <- httr::content(r_, "parsed")
 
   # Enable user
-  if (activate & !is.null(pwd)) {
-    invitation <- content(
-      GET(
+  if (activate && !is.null(pwd)) {
+    invitation <- httr::content(
+      httr::GET(
         url = sprintf("%s/mails?intent=%s&sortBy=creationTime&orderAscending=false&recipient=%s", urlBase, "Send%20user%20activation%20e-mail", URLencode(email, reserved = TRUE, repeated = TRUE)),
         config = auth
       ),
       "parsed"
     )$objects[[1]]$textBody
     uuid <- regmatches(invitation, regexpr("[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}", invitation))
-    r_ <- POST(
+    r_ <- httr::POST(
       url = sprintf("%s/user/activation/%s", urlBase, uuid),
       body = list("acceptPolicies" = "true", "password" = pwd),
       config = auth,
@@ -252,20 +320,28 @@ add_user <- function(name, email, profile, parentPk, urlBase, auth, activate = F
   return(u)
 }
 
-# 'add_scope': sends a POST request to create a new scope with start date = now (UTC) and optionally an automatic enrolment model (if scope provided, for virtual scopes)
-# Input: 'code' - code of scope to create
-#        'name' - name of scope to create
-#        'model' - name of model of scope to create
-#        'parentPk' - pk of parent to attach new scope
-#        'urlBase' - the url to platform's API
-#        'auth' - an authentication object
-#        'criteria' (optional) - enrolment criteria.
-#                                Shape: list of conditions (shape: list with elts "datasetModelId" (?), "attributeId", "operator"(e.g."EQUALS"), "value").
-#                                When NULL (default), no automatic enrolment is set.
-# Output: parsed response content from scope creation's POST request
+#' Create new scope
+#'
+#' Creates a new scope with start date set to current time (UTC).
+#' Optionally sets up automatic enrollment criteria for virtual scopes.
+#'
+#' @param code Character. Code identifier for the scope.
+#' @param name Character. Display name for the scope.
+#' @param model Character. Model identifier for the scope type.
+#' @param parentPk Integer. Primary key of the parent scope.
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param criteria List or NULL. Enrollment criteria for automatic enrollment.
+#'   Should be a list of conditions with elements "datasetModelId",
+#'   "attributeId", "operator" (e.g., "EQUALS"), and "value". When NULL
+#'   (default), no automatic enrollment is configured.
+#'
+#' @return Parsed response content from scope creation request.
+#'
+#' @export
 add_scope <- function(code, name, model, parentPk, urlBase, auth, criteria = NULL) {
   # Create scope
-  rScope <- POST(
+  rScope <- httr::POST(
     url = sprintf("%s/scopes", urlBase),
     body = list(
       "parentScopePk" = parentPk, "code" = code, "shortname" = name,
@@ -277,7 +353,7 @@ add_scope <- function(code, name, model, parentPk, urlBase, auth, criteria = NUL
 
   # Check for success and extract content of response
   if (rScope$status_code != 201) stop(sprintf("Unable to create %s %s (%s) with parent %s at %s.", model, name, code, parentPk, urlBase))
-  rScope <- content(rScope, "parsed")
+  rScope <- httr::content(rScope, "parsed")
 
   # Optional: add enrolment model
   # TODO: handle errors here
@@ -290,14 +366,14 @@ add_scope <- function(code, name, model, parentPk, urlBase, auth, criteria = NUL
       return(el)
     })
     # Add criteria to enrolment model
-    POST(
+    httr::POST(
       url = sprintf("%s/scopes/%i/enrollment/count", urlBase, rScope$pk),
       body = rScope$enrollmentModel,
       config = auth,
       encode = c("json")
     )
     # Save enrolment model
-    PUT(
+    httr::PUT(
       url = sprintf("%s/scopes/%i", urlBase, rScope$pk),
       body = rScope,
       config = auth,
@@ -312,18 +388,37 @@ add_scope <- function(code, name, model, parentPk, urlBase, auth, criteria = NUL
 ### Data / metadata extracts ###
 ################################
 
-# 'get_extract': extracts a csv out of a GET response
-# Input: 'urlBase' - the url to platform's API
-#        'auth' - an authentication object
-#        'expName' - the name of the extract we want to retrieve
-#        'maxAttempts' - maximum number of times to try to get resource in case of failure
-#        'guessMax' - number of rows of the extract to use to guess column type
-#                       0 (default) - Uses the default behavior of readr::read_csv(), which typically scans the first 1,000 rows to guess column types.
-#                       Positive integer (e.g., 100, 1000, 5000) - Explicitly specifies the number of rows to scan for type inference. More rows = more accurate type detection but slower parsing.
-#                       -1 - Scans all rows in the file for type inference. Provides the most accurate type detection but can be slow for large files.
-#        'includeModifDate' - should export include modification date of fields?
-#        'scopePk' - optional scope primary key to filter the extract
-# Output: the csv extract as a data.frame
+#' Extract data table from platform
+#'
+#' Retrieves a CSV data export for a specified table from the platform API
+#' and returns it as a data frame. Includes retry logic and column type
+#' inference configuration.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param expName Character. The data table model ID to retrieve.
+#' @param maxAttempts Integer. Maximum number of retry attempts in case of
+#'   failure (default: 5).
+#' @param guessMax Integer. Number of rows to scan for column type inference.
+#'   The CSV parser (via \code{httr::content()} using \code{readr::read_csv()})
+#'   examines the first N rows to infer the data type of each column (numeric,
+#'   character, date, etc.). If later rows contain values incompatible with the
+#'   inferred type, they may be coerced or read as NA. Options:
+#'   \itemize{
+#'     \item 0 (default): Uses readr's default behavior (1,000 rows)
+#'     \item Positive integer: Scans specified number of rows
+#'     \item -1: Scans all rows (most accurate but slowest)
+#'   }
+#'   Increase this value if you encounter unexpected type coercion, especially
+#'   in datasets where certain column types only become apparent after many rows.
+#' @param includeModifDate Logical. Should the export include modification
+#'   dates of fields? (default: FALSE).
+#' @param scopePk Integer or NULL. Optional scope primary key to filter the
+#'   extract to a specific scope.
+#'
+#' @return A data frame containing the extracted table data.
+#'
+#' @export
 get_extract <- function(urlBase, auth, expName, maxAttempts = 5, guessMax = 0, includeModifDate = FALSE, scopePk = NULL) {
   expAddress <- sprintf(
     "%s/extracts?datasetModelIds=%s%s%s",
@@ -336,10 +431,10 @@ get_extract <- function(urlBase, auth, expName, maxAttempts = 5, guessMax = 0, i
   # Try max. [maxAttempts] times to retrieve requested extract
   attempts <- 0
   success <- FALSE
-  while (attempts < maxAttempts & !success) {
+  while (attempts < maxAttempts && !success) {
     getRes <- tryCatch(
       {
-        GET(
+        httr::GET(
           url = expAddress,
           config = auth
         )
@@ -355,7 +450,7 @@ get_extract <- function(urlBase, auth, expName, maxAttempts = 5, guessMax = 0, i
 
   # Throw error if still unsuccessful; extract content otherwise
   if (getRes$status_code != 200) stop(sprintf("Extract retrieval at: %s failed after %i attempts.", expAddress, maxAttempts))
-  cont <- content(getRes,
+  cont <- httr::content(getRes,
     type = "text/csv",
     na = character(),
     encoding = "UTF-8",
@@ -366,22 +461,34 @@ get_extract <- function(urlBase, auth, expName, maxAttempts = 5, guessMax = 0, i
   return(df)
 }
 
-# 'get_report': extracts workflow summary details
-# Input: 'urlBase' - the url to platform's API
-#        'auth' - an authentication object
-#        'repName' - name of report
-#        'maxAttempts' - maximum number of times to try to get resource in case of failure
-# Output: the ed exportreport as a data.frame
+#' Extract workflow summary report
+#'
+#' Retrieves workflow summary details from the platform as a CSV export.
+#' Can optionally include historical workflow data.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param repName Character. Name of the workflow report to retrieve.
+#' @param maxAttempts Integer. Maximum number of retry attempts in case of
+#'   failure (default: 5).
+#' @param guessMax Integer. Number of rows to scan for column type inference
+#'   (default: 0).
+#' @param withHistory Logical. Should the export include historical workflow
+#'   data? (default: FALSE).
+#'
+#' @return A data frame containing the workflow report.
+#'
+#' @export
 get_report <- function(urlBase, auth, repName, maxAttempts = 5, guessMax = 0, withHistory = FALSE) {
   repAddress <- sprintf("%s/widget/workflow-summary/%s/export%s?scopePk=1", urlBase, repName, ifelse(withHistory, "/history", ""))
 
   # Try max. [maxAttempts] times to retrieve requested report
   attempts <- 0
   success <- FALSE
-  while (attempts < maxAttempts & !success) {
+  while (attempts < maxAttempts && !success) {
     getRes <- tryCatch(
       {
-        GET(
+        httr::GET(
           url = repAddress,
           config = auth
         )
@@ -397,7 +504,7 @@ get_report <- function(urlBase, auth, repName, maxAttempts = 5, guessMax = 0, wi
 
   # Throw error if still unsuccessful; extract content otherwise
   if (getRes$status_code != 200) stop(sprintf("Report retrieval at: %s failed after %i attempts.", repAddress, maxAttempts))
-  cont <- content(getRes,
+  cont <- httr::content(getRes,
     type = "text/csv",
     na = character(),
     encoding = "UTF-8",
@@ -408,22 +515,31 @@ get_report <- function(urlBase, auth, repName, maxAttempts = 5, guessMax = 0, wi
   return(df)
 }
 
-# 'get_widget': extracts workflow widget
-# Input: 'urlBase' - the url to platform's API
-#        'auth' - an authentication object
-#        'widName' - name of widget
-#        'maxAttempts' - maximum number of times to try to get resource in case of failure
-# Output: the exported csv widget as a data.frame
+#' Extract workflow widget data
+#'
+#' Retrieves workflow widget data from the platform as a CSV export.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param widName Character. Name of the workflow widget to retrieve.
+#' @param maxAttempts Integer. Maximum number of retry attempts in case of
+#'   failure (default: 5).
+#' @param guessMax Integer. Number of rows to scan for column type inference
+#'   (default: 0).
+#'
+#' @return A data frame containing the widget data.
+#'
+#' @export
 get_widget <- function(urlBase, auth, widName, maxAttempts = 5, guessMax = 0) {
   widAddress <- sprintf("%s/widget/workflow/%s/export?scopePks=1", urlBase, widName)
 
   # Try max. [maxAttempts] times to retrieve requested report
   attempts <- 0
   success <- FALSE
-  while (attempts < maxAttempts & !success) {
+  while (attempts < maxAttempts && !success) {
     getRes <- tryCatch(
       {
-        GET(
+        httr::GET(
           url = widAddress,
           config = auth
         )
@@ -439,7 +555,7 @@ get_widget <- function(urlBase, auth, widName, maxAttempts = 5, guessMax = 0) {
 
   # Throw error if still unsuccessful; extract content otherwise
   if (getRes$status_code != 200) stop(sprintf("Widget retrieval at: %s failed after %i attempts.", widAddress, maxAttempts))
-  cont <- content(getRes,
+  cont <- httr::content(getRes,
     type = "text/csv",
     na = character(),
     encoding = "UTF-8",
@@ -450,22 +566,31 @@ get_widget <- function(urlBase, auth, widName, maxAttempts = 5, guessMax = 0) {
   return(df)
 }
 
-#' download_overdue_patient_report: Download overdue report for a given patient
-#' Input: 'urlBase' - the url to platform's API
-#'        'auth' - an authentication object
-#'        'patient' - patient identifier (string)
-#'        'maxAttempts' - maximum number of times to try to get resource in case of failure
-#'        'guessMax' - number of rows to use to guess column type
-#' Output: the csv report as a data.frame
+#' Extract overdue widget report
+#'
+#' Downloads the overdue report widget data from the platform. This report
+#' shows items that are past their expected completion dates.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param overdueWidName Character. Name of the overdue widget to retrieve.
+#' @param maxAttempts Integer. Maximum number of retry attempts in case of
+#'   failure (default: 5).
+#' @param guessMax Integer. Number of rows to scan for column type inference
+#'   (default: 0).
+#'
+#' @return A data frame containing the overdue report data.
+#'
+#' @export
 get_overdue_widget <- function(urlBase, auth, overdueWidName, maxAttempts = 5, guessMax = 0) {
   repAddress <- sprintf("%s/widget/overdue/%s/export", urlBase, overdueWidName)
 
   attempts <- 0
   success <- FALSE
-  while (attempts < maxAttempts & !success) {
+  while (attempts < maxAttempts && !success) {
     getRes <- tryCatch(
       {
-        GET(
+        httr::GET(
           url = repAddress,
           config = auth
         )
@@ -480,7 +605,7 @@ get_overdue_widget <- function(urlBase, auth, overdueWidName, maxAttempts = 5, g
   }
 
   if (getRes$status_code != 200) stop(sprintf("Overdue report retrieval at: %s failed after %i attempts.", repAddress, maxAttempts))
-  cont <- content(getRes,
+  cont <- httr::content(getRes,
     type = "text/csv",
     na = character(),
     encoding = "UTF-8",
@@ -492,22 +617,33 @@ get_overdue_widget <- function(urlBase, auth, overdueWidName, maxAttempts = 5, g
 }
 
 
-# 'get_transfers': extracts patient transfers file through GET request
-# Input: 'urlBase' - the url to platform's API
-#        'auth' - an authentication object
-#        'maxAttempts' - maximum number of times to try to get resource in case of failure
-# 				 'scopeModelId' - ID of scope model for which we want to extract transfers
-# Output: the csv extract content
+#' Extract patient transfer records
+#'
+#' Retrieves the patient transfer history from the platform. Transfers
+#' represent movements of patients between scopes (e.g., between centers
+#' or sites).
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param maxAttempts Integer. Maximum number of retry attempts in case of
+#'   failure (default: 5).
+#' @param scopeModelId Character. ID of the scope model for which to extract
+#'   transfers (default: "PATIENT").
+#'
+#' @return A data frame containing the transfer records with columns for
+#'   patient identifiers, start/stop dates, and scope information.
+#'
+#' @export
 get_transfers <- function(urlBase, auth, maxAttempts = 5, scopeModelId = "PATIENT") {
   trfAddress <- sprintf("%s/reports/transfers?scopeModelId=%s", urlBase, scopeModelId)
 
   # Try max. [maxAttempts] times to retrieve requested report
   attempts <- 0
   success <- FALSE
-  while (attempts < maxAttempts & !success) {
+  while (attempts < maxAttempts && !success) {
     getRes <- tryCatch(
       {
-        GET(
+        httr::GET(
           url = trfAddress,
           config = auth
         )
@@ -523,7 +659,7 @@ get_transfers <- function(urlBase, auth, maxAttempts = 5, scopeModelId = "PATIEN
 
   # Throw error if still unsuccessful; extract content otherwise
   if (getRes$status_code != 200) stop(sprintf("Transfers retrieval at: %s failed after %i attempts.", trfAddress, maxAttempts))
-  df <- as.data.frame(content(getRes,
+  df <- as.data.frame(httr::content(getRes,
     type = "text/csv",
     encoding = "UTF-8"
   ))
@@ -531,21 +667,33 @@ get_transfers <- function(urlBase, auth, maxAttempts = 5, scopeModelId = "PATIEN
   return(df)
 }
 
-# 'get_events': extracts event export file through GET request
-# Input: 'urlBase' - the url to platform's API
-#        'auth' - an authentication object
-#        'maxAttempts' - maximum number of times to try to get resource in case of failure
-# Output: the csv export content
+#' Extract event records
+#'
+#' Retrieves the event export file from the platform. Events represent
+#' significant occurrences or milestones within the study (e.g., patient
+#' visits, data collection events).
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param maxAttempts Integer. Maximum number of retry attempts in case of
+#'   failure (default: 5).
+#' @param scopeModelId Character. ID of the scope model for which to extract
+#'   events (default: "PATIENT").
+#'
+#' @return A data frame containing the event records with columns for event
+#'   identifiers, dates, scope information, and event details.
+#'
+#' @export
 get_events <- function(urlBase, auth, maxAttempts = 5, scopeModelId = "PATIENT") {
   evtAddress <- sprintf("%s/reports/events?scopeModelId=%s", urlBase, scopeModelId)
 
   # Try max. [maxAttempts] times to retrieve requested report
   attempts <- 0
   success <- FALSE
-  while (attempts < maxAttempts & !success) {
+  while (attempts < maxAttempts && !success) {
     getRes <- tryCatch(
       {
-        GET(
+        httr::GET(
           url = evtAddress,
           config = auth
         )
@@ -561,7 +709,7 @@ get_events <- function(urlBase, auth, maxAttempts = 5, scopeModelId = "PATIENT")
 
   # Throw error if still unsuccessful; extract content otherwise
   if (getRes$status_code != 200) stop(sprintf("Events retrieval at: %s failed after %i attempts.", evtAddress, maxAttempts))
-  df <- as.data.frame(content(getRes,
+  df <- as.data.frame(httr::content(getRes,
     type = "text/csv",
     encoding = "UTF-8"
   ))
@@ -573,62 +721,112 @@ get_events <- function(urlBase, auth, maxAttempts = 5, scopeModelId = "PATIENT")
 ### Batch retrieval of     ###
 ### extracts and reports   ###
 ##############################
-# 'get_extracts': function that retrieves multiple datasets from server
-# Input : 'auth' - the user's authentication object
-#         'tableIds' - vector of dataset model IDs to retrieve
-#         'includeModifDate' - boolean indicating whether to include modification dates
-# Output: returns a named list of dataframes containing the datasets
-get_extracts <- function(auth, tableIds, includeModifDate){
+
+#' Retrieve multiple data tables
+#'
+#' Retrieves data from multiple tables on the server in a batch operation using
+#' \code{\link{get_extract}}. Returns a named list where each element is a
+#' data frame from one table.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param tableIds Character vector. Data table model IDs to retrieve.
+#' @param includeModifDate Logical. Should exports include modification dates?
+#'
+#' @return A named list of data frames, one for each table. List names
+#'   are the lowercase table IDs.
+#'
+#' @seealso \code{\link{get_extract}} for retrieving a single data table.
+#'
+#' @export
+get_extracts <- function(urlBase, auth, tableIds, includeModifDate) {
   # Get all exports
-  data <- lapply(tableIds, function(datasetId){
-    tempdf <- get_extract(STUDYURL, auth, datasetId, includeModifDate = includeModifDate, guessMax = 5)
-    return (tempdf)
+  data <- lapply(tableIds, function(datasetId) {
+    tempdf <- get_extract(urlBase, auth, datasetId, includeModifDate = includeModifDate, guessMax = 5)
+    return(tempdf)
   })
   # Format and return the list
   names(data) <- tolower(tableIds)
-  return (data)
+  return(data)
 }
 
-# 'get_reports': function that retrieves multiple workflow reports from server
-# Input : 'auth' - the user's authentication object
-#         'reportIds' - vector of workflow report names to retrieve
-#         'withHistory' - boolean indicating whether to include historical data
-# Output: returns a named list of dataframes containing the workflow reports
-get_reports <-function(auth, reportIds, withHistory) {
+#' Retrieve multiple workflow reports
+#'
+#' Retrieves multiple workflow reports from the server in a batch operation using
+#' \code{\link{get_report}}. Returns a named list where each element is a
+#' data frame from one report.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param reportIds Character vector. Workflow report names to retrieve.
+#' @param maxAttempts Integer. Maximum number of retry attempts in case of failure (default: 5).
+#' @param withHistory Logical. Should reports include historical data?
+#'
+#' @return A named list of data frames containing the workflow reports. List
+#'   names are the lowercase report IDs.
+#'
+#' @seealso \code{\link{get_report}} for retrieving a single workflow report.
+#'
+#' @export
+get_reports <- function(urlBase, auth, reportIds, maxAttempts = 5, withHistory = FALSE) {
   # Get all workflow reports
-  reports <- lapply(reportIds, function(reportName){
-    tempdf <- get_report(STUDYURL, auth, reportName, withHistory)
-    return (tempdf)
+  reports <- lapply(reportIds, function(reportName) {
+    tempdf <- get_report(urlBase, auth, reportName, maxAttempts = maxAttempts, withHistory = withHistory)
+    return(tempdf)
   })
   # Format and return the list
   names(reports) <- tolower(reportIds)
   return(reports)
 }
 
-# 'get_widget_reports': function that retrieves multiple widget reports from server
-# Input : 'auth' - the user's authentication object
-#         'widgetIds' - vector of widget names to retrieve
-# Output: returns a named list of dataframes containing the widget reports
-get_widget_reports <-function(auth, widgetIds) {
+#' Retrieve multiple widget reports
+#'
+#' Retrieves multiple widget reports from the server in a batch operation using
+#' \code{\link{get_widget}}. Returns a named list where each element is a
+#' data frame from one widget.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param widgetIds Character vector. Widget names to retrieve.
+#'
+#' @return A named list of data frames containing the widget reports. List
+#'   names are the lowercase widget IDs.
+#'
+#' @seealso \code{\link{get_widget}} for retrieving a single widget report.
+#'
+#' @export
+get_widget_reports <- function(urlBase, auth, widgetIds) {
   # Get all widget reports
-  widgetReports <- lapply(widgetIds, function(reportName){
-    tempdf <- get_widget(STUDYURL, auth, reportName)
-    return (tempdf)
+  widgetReports <- lapply(widgetIds, function(reportName) {
+    tempdf <- get_widget(urlBase, auth, reportName)
+    return(tempdf)
   })
   # Format and return the list
   names(widgetReports) <- tolower(widgetIds)
   return(widgetReports)
 }
 
-# 'get_overdue_widget_reports': function that retrieves multiple overdue widget reports from server
-# Input : 'auth' - the user's authentication object
-#         'widgetIds' - vector of overdue widget names to retrieve
-# Output: returns a named list of dataframes containing the overdue widget reports
-get_overdue_widget_reports <-function(auth, widgetIds) {
+#' Retrieve multiple overdue widget reports
+#'
+#' Retrieves multiple overdue widget reports from the server in a batch
+#' operation using \code{\link{get_overdue_widget}}. Returns a named list
+#' where each element is a data frame from one overdue widget.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param widgetIds Character vector. Overdue widget names to retrieve.
+#'
+#' @return A named list of data frames containing the overdue widget reports.
+#'   List names are the lowercase widget IDs.
+#'
+#' @seealso \code{\link{get_overdue_widget}} for retrieving a single overdue widget report.
+#'
+#' @export
+get_overdue_widget_reports <- function(urlBase, auth, widgetIds) {
   # Get all overdue widget reports
-  overduewidgetReports <- lapply(widgetIds, function(reportName){
-    tempdf <- get_overdue_widget(STUDYURL, auth, reportName)
-    return (tempdf)
+  overduewidgetReports <- lapply(widgetIds, function(reportName) {
+    tempdf <- get_overdue_widget(urlBase, auth, reportName)
+    return(tempdf)
   })
   # Format and return the list
   names(overduewidgetReports) <- tolower(widgetIds)
@@ -639,17 +837,27 @@ get_overdue_widget_reports <-function(auth, widgetIds) {
 ### Data / metadata update ###
 ##############################
 
-# 'build_url': builds an url for data modification to send through a PUT request
-# Input: 'df' - a dataframe (data.frame) containing all necessary ids (scope, visit (if and only if dataset on visit), dataset)
-#        'urlBase' - the url to platform's API
-#        'v' - a boolean indicating whether we should show progress bar or not
-#        'scopeModelId' - ID of scope model where data is to be updated
-# Output: an nObs-long characters vector containing the url for each observation we want to update
+#' Build URLs for data modification
+#'
+#' Constructs API endpoint URLs for data modification requests. Creates
+#' one URL per row in the input data frame.
+#'
+#' @param df Data frame containing dataset identifiers. Must include columns
+#'   for scope ID, dataset ID, and optionally event ID.
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param v Logical. Should progress bar be displayed? (default: FALSE).
+#' @param scopeModelId Character. ID of the scope model where data is to be
+#'   updated (default: "PATIENT").
+#'
+#' @return A character vector of URLs, one for each row in \code{df}.
+#'
+#' @keywords internal
+#' @noRd
 build_url <- function(df, urlBase, v = FALSE, scopeModelId = "PATIENT") {
   # TODO: check if df has necessary column names
 
-  if (v) pboptions(type = "txt") else pboptions(type = "none")
-  urls <- pbapply(
+  if (v) pbapply::pboptions(type = "txt") else pbapply::pboptions(type = "none")
+  urls <- pbapply::pbapply(
     df,
     1,
     function(x, u) {
@@ -671,23 +879,36 @@ build_url <- function(df, urlBase, v = FALSE, scopeModelId = "PATIENT") {
   return(urls)
 }
 
-# 'build_url_multiple': builds an url for repeatable data importation to send through a PUT request
-# Input: 'df' - a dataframe (data.frame) containing all necessary ids (scope and visit (if and only if dataset on visit))
-#        'urlBase' - the url to platform's API
-#        'v' - a boolean indicating whether we should show progress bar or not
-#        'removal' - boolean to build URL for dataset removal
-#        'rationale' - Characters to provide if removal is TRUE
-#        'scopeModelId' - ID of scope model where data is to be updated
-# Output: an nObs-long characters vector containing the url for each observation we want to update
+#' Build URLs for repeatable dataset operations
+#'
+#' Constructs API endpoint URLs for repeatable dataset import, removal, or
+#' restoration requests. Creates one URL per row in the input data frame.
+#'
+#' @param df Data frame containing scope and event identifiers.
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param v Logical. Should progress bar be displayed? (default: FALSE).
+#' @param scopeModelId Character. ID of the scope model where data is to be
+#'   updated (default: "PATIENT").
+#' @param removeRestoreMode Logical. Are we building URLs for dataset removal
+#'   or restoration? (default: FALSE).
+#' @param action Character or NULL. Action to perform: "remove" or "restore".
+#'   Required when \code{removeRestoreMode = TRUE}.
+#' @param rationale Character or NULL. Rationale for the action. Required when
+#'   \code{removeRestoreMode = TRUE}.
+#'
+#' @return A character vector of URLs, one for each row in \code{df}.
+#'
+#' @keywords internal
+#' @noRd
 build_url_multiple <- function(df, urlBase, v = FALSE, scopeModelId = "PATIENT", removeRestoreMode = FALSE, action = NULL, rationale = NULL) {
-  if (removeRestoreMode & (is.null(action) || (action != "remove" & action != "restore"))) stop("An action remove or restore is required for dataset.")
-  if (removeRestoreMode & is.null(rationale)) stop("A rationale is required for dataset removal.")
+  if (removeRestoreMode && (is.null(action) || (action != "remove" && action != "restore"))) stop("An action remove or restore is required for dataset.")
+  if (removeRestoreMode && is.null(rationale)) stop("A rationale is required for dataset removal.")
   rationale <- URLencode(rationale)
 
   # TODO: check if df has necessary column names
 
-  if (v) pboptions(type = "txt") else pboptions(type = "none")
-  urls <- pbapply(
+  if (v) pbapply::pboptions(type = "txt") else pbapply::pboptions(type = "none")
+  urls <- pbapply::pbapply(
     df,
     1,
     function(x, u) {
@@ -713,21 +934,31 @@ build_url_multiple <- function(df, urlBase, v = FALSE, scopeModelId = "PATIENT",
   return(urls)
 }
 
-# 'build_wf_url': builds an url for workflow modification to send through a PUT request
-# Input: 'df' - a dataframe (data.frame) containing all necessary ids (scope, visit (optionally), dataset (optionally), field (optionally), workflow)
-#        'urlBase' - the url to platform's API
-#        'v' - a boolean indicating whether we should show progress bar or not
-#        'scopeModel' - ID of scope model, formatted for export, where data is to be updated
-# Output: an nObs-long characters vector containing the url for each observation we want to update
+#' Build URLs for workflow modifications
+#'
+#' Constructs API endpoint URLs for workflow modification requests. Creates
+#' one URL per row in the input data frame.
+#'
+#' @param df Data frame containing workflow identifiers. Must include scope ID,
+#'   workflow ID, and optionally event, dataset, and field IDs.
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param v Logical. Should progress bar be displayed? (default: FALSE).
+#' @param scopeModel Character. ID of the scope model (as formatted in exports)
+#'   where workflow is to be updated (default: "Patient").
+#'
+#' @return A character vector of URLs, one for each row in \code{df}.
+#'
+#' @keywords internal
+#' @noRd
 build_wf_url <- function(df, urlBase, v = FALSE, scopeModel = "Patient") {
   # TODO: check if df has necessary column names
 
-  if (v) pboptions(type = "txt") else pboptions(type = "none")
-  urls <- pbapply(
+  if (v) pbapply::pboptions(type = "txt") else pbapply::pboptions(type = "none")
+  urls <- pbapply::pbapply(
     df,
     1,
     function(x, u) {
-      visitPart <- ifelse("Event ID" %in% colnames(df) & !is.na(x["Event ID"]),
+      visitPart <- ifelse("Event ID" %in% colnames(df) && !is.na(x["Event ID"]),
         sprintf("/events/%s", x["Event ID"]),
         ""
       ) # Visit: if not furnished, we must not include it
@@ -756,21 +987,32 @@ build_wf_url <- function(df, urlBase, v = FALSE, scopeModel = "Patient") {
 }
 
 
-# 'buildWFInitURL': builds an url for workflow initialisaton to send through a POST request
-# Input: 'df' - a dataframe (data.frame) containing all necessary ids (scopePk, eventPk (optionally), datasetPk (optionally), fieldPk (optionally), workflowId, actionId, context)
-#        'urlBase' - the url to platform's API
-#        'v' - a boolean indicating whether we should show progress bar or not
-#        'scopeModel' - ID of scope model, formatted for export, where data is to be updated
-#        'auth': an authentication object
-#        'fieldID': field id on which the workflow will be initiated
-# Output: an nObs-long characters vector containing the url for each observation we want to update
+#' Build URLs for workflow initialization
+#'
+#' Constructs API endpoint URLs for workflow initialization requests.
+#' Retrieves field primary keys from dataset and field IDs, then builds
+#' complete URLs.
+#'
+#' @param df Data frame containing workflow initialization identifiers. Must
+#'   include scope PK, workflow ID, action ID, context, and optionally event PK,
+#'   dataset PK.
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param v Logical. Should progress bar be displayed? (default: FALSE).
+#' @param scopeModel Character. ID of the scope model (default: "PATIENT").
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param fieldID Character. Field ID on which the workflow will be initiated.
+#'
+#' @return A character vector of URLs, one for each row in \code{df}.
+#'
+#' @keywords internal
+#' @noRd
 build_wf_init_url_on_field <- function(df, urlBase, v = FALSE, scopeModel = "PATIENT", auth, fieldID) {
   # TODO: check if df has necessary column names
 
   # get field pks from dataset pk and field ID.
   r <- apply(df, 1, simplify = FALSE, function(x) {
     url <- build_url(t(data.frame(x)), urlBase)
-    GET(
+    httr::GET(
       url = url,
       config = auth,
       encode = c("json")
@@ -779,7 +1021,7 @@ build_wf_init_url_on_field <- function(df, urlBase, v = FALSE, scopeModel = "PAT
 
   # Add fieldId to main dataframe
   fieldspk <- sapply(r, function(resp) {
-    dataset <- content(resp)
+    dataset <- httr::content(resp)
     result <- sapply(dataset$fields, function(field) {
       if (field$modelId == fieldID) field$pk else NULL
     })
@@ -789,8 +1031,8 @@ build_wf_init_url_on_field <- function(df, urlBase, v = FALSE, scopeModel = "PAT
   df$FIELD_ID <- fieldspk
 
   # Build complete url
-  if (v) pboptions(type = "txt") else pboptions(type = "none")
-  urls <- pbapply(
+  if (v) pbapply::pboptions(type = "txt") else pbapply::pboptions(type = "none")
+  urls <- pbapply::pbapply(
     df,
     1,
     function(x, u) {
@@ -822,17 +1064,27 @@ build_wf_init_url_on_field <- function(df, urlBase, v = FALSE, scopeModel = "PAT
 }
 
 
-# 'build_payload': constructs the payload for data modification to send through a PUT request
-# Input: 'df' - a dataframe (data.frame) containing all, and only the information to update in EDC + column DATASET_ID
-#        'v' - a boolean indicating whether we should show progress bar or not
-# Output: an nObs-long list containing payload (with 1 item per field to update) associated to each dataset instance
+#' Build payload for data modification
+#'
+#' Constructs the request payload for data modification requests. Creates
+#' structured field-level updates for each dataset instance.
+#'
+#' @param df Data frame containing information to update. Must include a
+#'   \code{DATASET_ID} column and one column per field to update.
+#' @param v Logical. Should progress bar be displayed? (default: FALSE).
+#'
+#' @return A list of payloads, one for each dataset instance. Each payload
+#'   contains the dataset PK and a list of field updates.
+#'
+#' @keywords internal
+#' @noRd
 build_payload <- function(df, v = FALSE) {
-  if (v) pboptions(type = "txt") else pboptions(type = "none")
+  if (v) pbapply::pboptions(type = "txt") else pbapply::pboptions(type = "none")
 
   colsToUpdate <- names(df)[!names(df) %in% "DATASET_ID"]
 
   # Check if urls are always in phase with dataset order?
-  pl <- unname(pbsapply(df$DATASET_ID, function(datasetPk) {
+  pl <- unname(pbapply::pbsapply(df$DATASET_ID, function(datasetPk) {
     datasetRow <- df[df$DATASET_ID == datasetPk, , drop = FALSE]
     datasetPl <- list(
       pk = datasetPk,
@@ -855,19 +1107,29 @@ build_payload <- function(df, v = FALSE) {
   return(pl)
 }
 
-# 'build_payload_multiple': constructs the payload for repeatable data importation to send through a PUT request
-# Input: 'df' - a dataframe (data.frame) containing all, and only the information to update in EDC
-# 				 'datasetId': ID of the dataset to be imported
-#        'v' - a boolean indicating whether we should show progress bar or not
-# Output: an nObs-long list containing payload (with 1 item per field to update) associated to each dataset instance
+#' Build payload for repeatable dataset import
+#'
+#' Constructs the request payload for repeatable dataset importation.
+#' Generates unique UUIDs for each new dataset instance.
+#'
+#' @param df Data frame containing information to import. Each row represents
+#'   one instance of the repeatable dataset.
+#' @param datasetId Character. ID of the dataset model being imported.
+#' @param v Logical. Should progress bar be displayed? (default: FALSE).
+#'
+#' @return A list of payloads, one for each dataset instance. Each payload
+#'   contains a unique UUID, the dataset model ID, and field values.
+#'
+#' @keywords internal
+#' @noRd
 build_payload_multiple <- function(df, datasetId, v = FALSE) {
-  if (v) pboptions(type = "txt") else pboptions(type = "none")
+  if (v) pbapply::pboptions(type = "txt") else pbapply::pboptions(type = "none")
 
   colsToImport <- names(df)
 
-  pl <- unname(pbsapply(rownames(df), function(rowName) {
+  pl <- unname(pbapply::pbsapply(rownames(df), function(rowName) {
     # Verify name of elements
-    newUuid <- UUIDgenerate()
+    newUuid <- uuid::UUIDgenerate()
     datasetPl <- list(
       id = newUuid,
       modelId = datasetId,
@@ -896,13 +1158,24 @@ build_payload_multiple <- function(df, datasetId, v = FALSE) {
   return(pl)
 }
 
-# 'build_wf_payload': constructs the payload for workflow modification to send through a PUT request
-# Input: 'df' - a dataframe (data.frame) containing all rows on which to perform action with info 'Workflow', 'Action' and 'Context'.
-#        'v' - a boolean indicating whether we should show progress bar or not
-# Output: an nObs-long list containing payload associated to each workflow instance
-build_wf_payload <- function(df, v = FALSE) {
-  if (v) pboptions(type = "txt") else pboptions(type = "none")
-  payloadList <- pbapply(
+#' Build payload for workflow modifications from data frame
+#'
+#' Constructs the request payload for workflow state changes. Extracts
+#' workflow information from data frame columns, allowing each row to
+#' specify a different workflow action.
+#'
+#' @param df Data frame with workflow information. Must include columns:
+#'   \code{Workflow}, \code{Action}, and \code{Context}.
+#' @param v Logical. Should progress bar be displayed? (default: FALSE).
+#'
+#' @return A list of payloads, one for each workflow action. Each contains
+#'   workflow ID, action ID, and rationale.
+#'
+#' @keywords internal
+#' @noRd
+build_wf_payload_from_df <- function(df, v = FALSE) {
+  if (v) pbapply::pboptions(type = "txt") else pbapply::pboptions(type = "none")
+  payloadList <- pbapply::pbapply(
     df,
     1,
     function(x) {
@@ -917,13 +1190,26 @@ build_wf_payload <- function(df, v = FALSE) {
   return(payloadList)
 }
 
-# 'build_wf_payload': constructs the payload for workflow initialisation to send through a POST request
-# Input: 'df' - a dataframe (data.frame) containing all rows on which to perform action with info 'Workflow', 'Action' and 'Context'.
-#        'v' - a boolean indicating whether we should show progress bar or not
-# Output: an nObs-long list containing payload associated to each workflow instance
-build_wf_payload <- function(df, workflow, action, context, v = FALSE) {
-  if (v) pboptions(type = "txt") else pboptions(type = "none")
-  payloadList <- pbapply(
+#' Build payload for workflow initialization with explicit parameters
+#'
+#' Constructs the request payload for workflow initialization. Accepts
+#' explicit workflow parameters that will be applied to all records in the
+#' data frame. Used when you want to trigger the same workflow action on
+#' multiple records.
+#'
+#' @param df Data frame with records on which to initialize workflows.
+#' @param workflow Character. Workflow ID to initialize.
+#' @param action Character. Action ID to perform.
+#' @param context Character. Rationale or context for the action.
+#' @param v Logical. Should progress bar be displayed? (default: FALSE).
+#'
+#' @return A list of payloads, one for each workflow initialization.
+#'
+#' @keywords internal
+#' @noRd
+build_wf_init_payload <- function(df, workflow, action, context, v = FALSE) {
+  if (v) pbapply::pboptions(type = "txt") else pbapply::pboptions(type = "none")
+  payloadList <- pbapply::pbapply(
     df,
     1,
     function(x) {
@@ -938,26 +1224,35 @@ build_wf_payload <- function(df, workflow, action, context, v = FALSE) {
   return(payloadList)
 }
 
-# 'send_put': sends as many PUT requests as there are observations
-# Input: 'url' - an nObs-long list of url, each related to an observation
-#        'payload' - an nObs-long list of payloads, can be null
-#        'auth' - an authentication object
-#        'comment' - the context to insert in audit trail
-#        'v' - a boolean indicating whether we should show progress bar or not
-# Output: an nObs-long list of PUT responses
+#' Send PUT requests
+#'
+#' Sends multiple PUT requests in batch, one for each URL/payload pair.
+#' Includes error handling to prevent failures from stopping the entire batch.
+#'
+#' @param url Character vector. URLs for the PUT requests.
+#' @param payload List or NULL. Payloads for each request. If NULL, sends
+#'   empty payloads.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param comment Character. Context to insert in the audit trail header.
+#' @param v Logical. Should progress timer be displayed? (default: FALSE).
+#'
+#' @return A list of response objects from the PUT requests.
+#'
+#' @keywords internal
+#' @noRd
 send_put <- function(url, payload = NULL, auth, comment, v = FALSE) {
-  if (v) pboptions(type = "timer") else pboptions(type = "none")
+  if (v) pbapply::pboptions(type = "timer") else pbapply::pboptions(type = "none")
 
   if (is.null(payload)) {
     # If the payload is NULL, set it to an empty string
     payload <- ""
   }
 
-  res <- pbmapply(
+  res <- pbapply::pbmapply(
     function(x, y, z, c) {
       tryCatch(
         {
-          o <- PUT(
+          o <- httr::PUT(
             url = x,
             body = y,
             config = z,
@@ -980,21 +1275,29 @@ send_put <- function(url, payload = NULL, auth, comment, v = FALSE) {
   return(res)
 }
 
-# 'send_post': sends as many POST requests as there are observations
-# Input: 'url' - an nObs-long list of url, each related to an observation
-#        'payload' - an nObs-long list of payloads
-#        'auth' - an authentication object
-#        'comment' - the context to insert in audit trail
-#        'v' - a boolean indicating whether we should show progress bar or not
-# Output: an nObs-long list of PUT responses
+#' Send POST requests
+#'
+#' Sends multiple POST requests in batch, one for each URL/payload pair.
+#' Includes error handling to prevent failures from stopping the entire batch.
+#'
+#' @param url Character vector. URLs for the POST requests.
+#' @param payload List. Payloads for each request.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param comment Character. Context to insert in the audit trail header.
+#' @param v Logical. Should progress timer be displayed? (default: FALSE).
+#'
+#' @return A list of response objects from the POST requests.
+#'
+#' @keywords internal
+#' @noRd
 send_post <- function(url, payload, auth, comment, v = FALSE) {
-  if (v) pboptions(type = "timer") else pboptions(type = "none")
+  if (v) pbapply::pboptions(type = "timer") else pbapply::pboptions(type = "none")
 
-  res <- pbmapply(
+  res <- pbapply::pbmapply(
     function(x, y, z, c) {
       tryCatch(
         {
-          o <- POST(
+          o <- httr::POST(
             url = x,
             body = y,
             config = z,
@@ -1018,20 +1321,28 @@ send_post <- function(url, payload, auth, comment, v = FALSE) {
   return(res)
 }
 
-# 'send_wf_put': sends as many PUT requests as there are observations
-# Input: 'url' - an nObs-long list of url, each related to an observation
-#        'payload' - an nObs-long list of payloads
-#        'auth' - an authentication object
-#        'v' - a boolean indicating whether we should show progress bar or not
-# Output: an nObs-long list of PUT responses
+#' Send workflow PUT requests
+#'
+#' Sends multiple PUT requests for workflow operations in batch. Similar to
+#' \code{\link{send_put}} but without audit trail comment headers.
+#'
+#' @param url Character vector. URLs for the workflow PUT requests.
+#' @param payload List. Payloads for each workflow request.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param v Logical. Should progress timer be displayed? (default: FALSE).
+#'
+#' @return A list of response objects from the PUT requests.
+#'
+#' @keywords internal
+#' @noRd
 send_wf_put <- function(url, payload, auth, v = FALSE) {
-  if (v) pboptions(type = "timer") else pboptions(type = "none")
+  if (v) pbapply::pboptions(type = "timer") else pbapply::pboptions(type = "none")
 
-  res <- pbmapply(
+  res <- pbapply::pbmapply(
     function(x, y) {
       tryCatch(
         {
-          o <- PUT(
+          o <- httr::PUT(
             url = x,
             body = y,
             config = auth,
@@ -1052,15 +1363,24 @@ send_wf_put <- function(url, payload, auth, v = FALSE) {
   return(res)
 }
 
-# 'update_edc': Updates the EDC
-# Input: 'df' - a dataframe (data.frame) containing all necessary information
-#        'fNames' - a vector containing names (string) of fields for EDC updating
-#        'atComments' - a vector containing names (string) of columns containing audit trail comments for each element of 'fNames'
-#        'urlBase' - the url to platform's API
-#        'auth' - an authentication header to perform actions
-#        'verb' - degree of progress printing (<1:nothing is displayed; 1: only the name of current operation is printed; >=2: the operations show progress state)
-#        'scopeModelId' - ID of scope model where data is to be updated
-# Output: the list of PUT request answers
+#' Update EDC data
+#'
+#' High-level function to update Electronic Data Capture (EDC) system data.
+#' Orchestrates URL building, payload construction, and request sending.
+#'
+#' @param df Data frame containing data to update, including dataset and field IDs.
+#' @param fNames Character vector. Column names from df corresponding to the field IDs to include in the import.
+#' @param atComment Character. Audit trail comment for the update operation.
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param verb Integer. Verbosity level: 0 (silent), 1 (operation names),
+#'   2+ (progress bars) (default: 0).
+#' @param scopeModelId Character. ID of the scope model where data is updated
+#'   (default: "PATIENT").
+#'
+#' @return A list of response objects from the update operation.
+#'
+#' @export
 update_edc <- function(df, fNames, atComment, urlBase, auth, verb = 0, scopeModelId = "PATIENT") {
   # Audit trail comments
   headAT <- create_at_header(atComment)
@@ -1083,16 +1403,25 @@ update_edc <- function(df, fNames, atComment, urlBase, auth, verb = 0, scopeMode
   return(r)
 }
 
-# 'update_edc_multiple': Updates the EDC with repeatable datasets
-# Input: 'df' - a dataframe (data.frame) containing all necessary information
-#        'fNames' - a vector containing names (string) of fields for EDC updating
-# 				 'datasetId': ID of the dataset to be imported
-#        'atComments' - a vector containing names (string) of columns containing audit trail comments for each element of 'fNames'
-#        'urlBase' - the url to platform's API
-#        'auth' - an authentication header to perform actions
-#        'verb' - degree of progress printing (<1:nothing is displayed; 1: only the name of current operation is printed; >=2: the operations show progress state)
-#        'scopeModelId' - ID of scope model where data is to be updated
-# Output: the list of PUT request answers
+#' Update EDC with repeatable datasets
+#'
+#' High-level function to import or update repeatable datasets in the EDC.
+#' Handles dataset creation with unique identifiers.
+#'
+#' @param df Data frame containing data to import. Each row is one instance.
+#' @param fNames Character vector. Column names from \code{df} corresponding
+#'   to the field IDs to include in the import.
+#' @param datasetId Character. ID of the repeatable dataset model.
+#' @param atComment Character. Audit trail comment for the operation.
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param verb Integer. Verbosity level: 0 (silent), 1 (operation names),
+#'   2+ (progress bars) (default: 0).
+#' @param scopeModelId Character. ID of the scope model (default: "PATIENT").
+#'
+#' @return A list of response objects from the import operation.
+#'
+#' @export
 update_edc_multiple <- function(df, fNames, datasetId, atComment, urlBase, auth, verb = 0, scopeModelId = "PATIENT") {
   # Audit trail comments
   headAT <- create_at_header(atComment)
@@ -1112,14 +1441,23 @@ update_edc_multiple <- function(df, fNames, datasetId, atComment, urlBase, auth,
   return(r)
 }
 
-# 'remove_edc_multiple': remove the repeatable datasets
-# Input: 'df' - a dataframe (data.frame) containing scopePk and datasetPk to remove dataset with correpsoding datasetPk
-#        'atComments' - an audit trail comment to document multiple dataset removal
-#        'urlBase' - the url to platform's API
-#        'auth' - an authentication header to perform actions
-#        'verb' - degree of progress printing (<1:nothing is displayed; 1: only the name of current operation is printed; >=2: the operations show progress state)
-#        'scopeModelId' - ID of scope model where data is to be updated
-# Output: the list of PUT request answers
+#' Remove repeatable datasets
+#'
+#' Removes one or more instances of repeatable datasets from the EDC.
+#' Documents the removal in the audit trail.
+#'
+#' @param df Data frame with scope PKs and dataset PKs to remove.
+#' @param datasetId Character. Dataset model ID (included for consistency).
+#' @param atComment Character. Audit trail comment documenting the removal.
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param verb Integer. Verbosity level: 0 (silent), 1 (operation names),
+#'   2+ (progress bars) (default: 0).
+#' @param scopeModelId Character. ID of the scope model (default: "PATIENT").
+#'
+#' @return A list of response objects from the removal operation.
+#'
+#' @export
 remove_edc_multiple <- function(df, datasetId, atComment, urlBase, auth, verb = 0, scopeModelId = "PATIENT") {
   headAT <- create_at_header(atComment)
   # Urls
@@ -1136,8 +1474,25 @@ remove_edc_multiple <- function(df, datasetId, atComment, urlBase, auth, verb = 
   return(r)
 }
 
-# 'triggerActionWorkflow': trigger an action on an item
-# Input: 'df' - a dataframe containing scopePk, eventPk, dataset id,
+#' Trigger workflow action on field
+#'
+#' Initiates a workflow action on specific field instances. Useful for
+#' programmatically triggering workflow state changes.
+#'
+#' @param df Data frame with scope PK, event PK (optional), and dataset ID.
+#' @param workflow Character. Workflow ID to initialize.
+#' @param action Character. Action ID to perform.
+#' @param fieldID Character. Field model ID on which to trigger the workflow.
+#' @param context Character. Rationale or context for the action.
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param verb Integer. Verbosity level: 0 (silent), 1 (operation names),
+#'   2+ (progress bars) (default: 0).
+#' @param scopeModel Character. ID of the scope model (default: "PATIENT").
+#'
+#' @return A list of response objects from the workflow initialization.
+#'
+#' @export
 trigger_action_workflow_on_field <- function(df, workflow, action, fieldID, context, urlBase, auth, verb = 0, scopeModel = "PATIENT") {
   # TODO check what to put in the header
   headAT <- create_at_header(context)
@@ -1148,7 +1503,7 @@ trigger_action_workflow_on_field <- function(df, workflow, action, fieldID, cont
 
   # Payloads
   if (verb >= 1) print("Constructing payloads...")
-  pl <- build_wf_payload(df, workflow, action, context, verb >= 2)
+  pl <- build_wf_init_payload(df, workflow, action, context, verb >= 2)
 
   # Send the put request
   if (verb >= 1) print("Sending PUT requests...")
@@ -1158,14 +1513,23 @@ trigger_action_workflow_on_field <- function(df, workflow, action, fieldID, cont
 }
 
 
-# 'restore_edc_multiple': remove the repeatable datasets
-# Input: 'df' - a dataframe (data.frame) containing scopePk and datasetPk to remove dataset with correpsoding datasetPk
-#        'atComments' - an audit trail comment to document multiple dataset removal
-#        'urlBase' - the url to platform's API
-#        'auth' - an authentication header to perform actions
-#        'verb' - degree of progress printing (<1:nothing is displayed; 1: only the name of current operation is printed; >=2: the operations show progress state)
-#        'scopeModelId' - ID of scope model where data is to be updated
-# Output: the list of PUT request answers
+#' Restore removed repeatable datasets
+#'
+#' Restores previously removed instances of repeatable datasets in the EDC.
+#' Documents the restoration in the audit trail.
+#'
+#' @param df Data frame with scope PKs and dataset PKs to restore.
+#' @param datasetId Character. Dataset model ID (included for consistency).
+#' @param atComment Character. Audit trail comment documenting the restoration.
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param verb Integer. Verbosity level: 0 (silent), 1 (operation names),
+#'   2+ (progress bars) (default: 0).
+#' @param scopeModelId Character. ID of the scope model (default: "PATIENT").
+#'
+#' @return A list of response objects from the restoration operation.
+#'
+#' @export
 restore_edc_multiple <- function(df, datasetId, atComment, urlBase, auth, verb = 0, scopeModelId = "PATIENT") {
   headAT <- create_at_header(atComment)
 
@@ -1182,13 +1546,23 @@ restore_edc_multiple <- function(df, datasetId, atComment, urlBase, auth, verb =
   return(r)
 }
 
-# 'update_wf': Updates workflow status
-# Input: 'df' - a dataframe (data.frame) containing all necessary information (Patient, visit, dataset, field and workflow ids + workflow name, action and context)
-#        'urlBase' - the url to platform's API
-#        'auth' - an authentication header to perform actions
-#        'verb' - degree of progress printing (<1:nothing is displayed; 1: only the name of current operation is printed; >=2: the operations show progress state)
-#        'scopeModel' - ID of scope model, formatted for export, where wf is to be updated
-# Output: the list of PUT request answers
+#' Update workflow status
+#'
+#' High-level function to update workflow states in the EDC. Orchestrates
+#' URL building, payload construction, and request sending for workflows.
+#'
+#' @param df Data frame with workflow information including patient, visit,
+#'   dataset, field IDs, and workflow name, action, and context.
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param verb Integer. Verbosity level: 0 (silent), 1 (operation names),
+#'   2+ (progress bars) (default: 0).
+#' @param scopeModel Character. ID of the scope model as formatted in exports
+#'   (default: "Patient").
+#'
+#' @return A list of response objects from the workflow update operation.
+#'
+#' @export
 update_wf <- function(df, urlBase, auth, verb = 0, scopeModel = "Patient") {
   # Url for request
   if (verb >= 1) print("Building urls...")
@@ -1196,7 +1570,7 @@ update_wf <- function(df, urlBase, auth, verb = 0, scopeModel = "Patient") {
 
   # Payloads
   if (verb >= 1) print("Constructing payloads...")
-  pl <- build_wf_payload(df, verb >= 2)
+  pl <- build_wf_payload_from_df(df, verb >= 2)
 
   # Send the put request
   if (verb >= 1) print("Sending PUT requests...")
@@ -1208,10 +1582,34 @@ update_wf <- function(df, urlBase, auth, verb = 0, scopeModel = "Patient") {
 
 ##### HELPERS #####
 
-# 'get_instance_url': Retrieves url for a requested platform
-# Input: 'filePath' - path to file which contains listing of platforms
-#        'studyName' - name of study of interest
-#        'studyEnv' - environment of interest (local, validation, production)
+#' Get platform instance URL
+#'
+#' Retrieves the API URL for a requested study platform from a configuration
+#' file. Useful for managing multiple study environments.
+#'
+#' @param filePath Character. Path to CSV file containing platform listings.
+#'   File must have columns: Study, Environment, and Address.
+#' @param studyName Character. Name of the study of interest.
+#' @param studyEnv Character. Environment identifier (e.g., "local",
+#'   "validation", "production").
+#'
+#' @return Character. The API base URL for the specified study and environment.
+#'
+#' @examples
+#' \dontrun{
+#' # Example CSV file format (instances.csv):
+#' # Study,Environment,Address
+#' # TRIAL001,local,http://localhost:8080/api
+#' # TRIAL001,validation,https://trial001-val.example.com/api
+#' # TRIAL001,production,https://trial001.example.com/api
+#' # TRIAL002,production,https://trial002.example.com/api
+#'
+#' # Retrieve production URL for TRIAL001
+#' url <- get_instance_url("instances.csv", "TRIAL001", "production")
+#' # Returns: "https://trial001.example.com/api"
+#' }
+#'
+#' @export
 get_instance_url <- function(filePath, studyName, studyEnv) {
   urls <- read.csv(filePath, header = TRUE, stringsAsFactors = FALSE) # Read instance file csv
   url <- urls[urls$Study == studyName & urls$Environment == studyEnv, "Address"] # Get row of wanted study and environment
@@ -1232,16 +1630,40 @@ get_instance_url <- function(filePath, studyName, studyEnv) {
   return(url)
 }
 
-# 'create_at_header': Creates a header with audit trail context
-# Input: 'm' - the message to insert in AT comment
-# Output: a header object
+#' Create audit trail header
+#'
+#' Creates an HTTP header containing the audit trail context/rationale for
+#' data modifications.
+#'
+#' @param m Character. Message to insert in the audit trail comment.
+#'
+#' @return An httr header object with the X-Rationale field.
+#'
+#' @keywords internal
+#' @noRd
 create_at_header <- function(m) {
-  add_headers("X-Rationale" = m)
+  httr::add_headers("X-Rationale" = m)
 }
 
-# 'get_custom_status': Interprets the PUT responses and associates an exit status
-# Input: 'responses' - a list with all reponses from PUT request
-# Ouput: a same-length array with strings indicating whether the request succeeded or not
+#' Interpret PUT response status
+#'
+#' Interprets HTTP responses from PUT requests and categorizes them by
+#' success/failure status and reason.
+#'
+#' @param responses List. Response objects from PUT/POST requests.
+#' @param translate Logical. Should status messages be translated? (Currently
+#'   unused, default: FALSE).
+#'
+#' @return A list with two elements:
+#'   \itemize{
+#'     \item categories: Character vector of status categories
+#'       ("Success", "Client error", "Failure", etc.)
+#'     \item reasons: Character vector of status reasons
+#'       ("OK", "Bad Request", "No answer was received", etc.)
+#'   }
+#'
+#' @keywords internal
+#' @noRd
 get_custom_status <- function(responses, translate = FALSE) {
   categories <- sapply(
     responses,
@@ -1266,10 +1688,18 @@ get_custom_status <- function(responses, translate = FALSE) {
 }
 
 
-# 'retrieve_types': gives back to each element its original type (function created because 'apply' transforms data.frame into matrix)
-# Input: 'rowIn' - vector of elements with the same dummy type
-#        'tIn' - vector of cahracters containing types of each variable
-# Output: a list of the elements given as input but with their correct data type
+#' Restore original data types
+#'
+#' Restores the original type of each element in a row. Useful when working
+#' with \code{apply} which converts data frames to matrices (losing type info).
+#'
+#' @param rowIn Vector. Elements with uniform (dummy) type from matrix conversion.
+#' @param tIn Character vector. Original type names for each element
+#'   ("character", "numeric", "integer", "logical", "Date").
+#'
+#' @return A list of elements with their original data types restored.
+#' @keywords internal
+#' @noRd
 retrieve_types <- function(rowIn, tIn) {
   rowOut <- mapply(
     function(r, t) {
@@ -1297,10 +1727,17 @@ retrieve_types <- function(rowIn, tIn) {
   return(rowOut)
 }
 
-# 'recursive_apply': Applies a function recursively to each element of a list, not ignoring NULL elements
-# Input: 'x' - initially, a list with (or without) nested lists
-#        'fn' - the function to apply to leaf elements
-# Output: the same structure with function applied to each leaf elements
+#' Apply function recursively to list
+#'
+#' Applies a function recursively to each leaf element of a nested list
+#' structure. Unlike \code{rapply}, this function preserves NULL elements.
+#'
+#' @param x Initially a list, potentially with nested lists.
+#' @param fn Function. The function to apply to leaf (non-list) elements.
+#'
+#' @return The same nested structure with \code{fn} applied to all leaf elements.
+#' @keywords internal
+#' @noRd
 recursive_apply <- function(x, fn) {
   # If x is a list, return a list.
   if (is.list(x)) {
