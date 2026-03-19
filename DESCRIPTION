@@ -17,7 +17,8 @@ Imports:
     openssl,
     pbapply,
     uuid,
-    getPass
+    getPass,
+    readxl
 Suggests:
     testthat,
     lintr,
