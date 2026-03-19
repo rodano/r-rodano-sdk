@@ -1,4 +1,5 @@
 now <- Sys.Date()
+today <- now
 
 
 # Performs aggregate without throwing an error if input has 0 rows
@@ -8,25 +9,25 @@ now <- Sys.Date()
 #        - 'fun': summary function
 #        - '...': further arguments passed to summary function 'fun'
 #        - 'out_colnames': Optional. Specify different column names for summarised variables. Must be same length as dep_colnames.
-safe_aggregate <- function(dep_colnames, indep_colnames, df, fun, ..., out_colnames = NULL) {
+safe_aggregate <- function(depColnames, indepColnames, df, fun, ..., outColnames = NULL) {
   # Handle case where input df has 0 rows: return empty dataframe with expected column names and types
   if (nrow(df) == 0) {
     df_out <- df # Copy input df
-    df_out[, !(colnames(df) %in% c(dep_colnames, indep_colnames))] <- NULL # Remove columns that are not in formula
-    if (!is.null(out_colnames)) colnames(df_out)[colnames(df_out) %in% dep_colnames] <- out_colnames # Rename output column if specified
+    df_out[, !(colnames(df) %in% c(depColnames, indepColnames))] <- NULL # Remove columns that are not in formula
+    if (!is.null(outColnames)) colnames(df_out)[colnames(df_out) %in% depColnames] <- outColnames # Rename output column if specified
 
     # Generic case: call aggregate function
   } else {
     # LEFT SIDE VARIABLE(S)
 
     dep_list <- list()
-    if (is.null(out_colnames)) out_colnames <- dep_colnames # Possibly rename output column
-    dep_list[out_colnames] <- df[, dep_colnames, drop = FALSE]
+    if (is.null(outColnames)) outColnames <- depColnames # Possibly rename output column
+    dep_list[outColnames] <- df[, depColnames, drop = FALSE]
 
     # RIGHT SIDE VARIABLE(S)
 
     indep_list <- list()
-    indep_list[indep_colnames] <- df[, indep_colnames, drop = FALSE]
+    indep_list[indepColnames] <- df[, indepColnames, drop = FALSE]
 
     # Actually call aggregate function
 
@@ -102,10 +103,10 @@ partial_date_to_date <- function(str, format = "%d.%m.%Y", unknownDate = FALSE, 
   }
 
   # If dates contain unknowns, remove them
-  if (unknownDate & format == "%d.%m.%Y") {
+  if (unknownDate && format == "%d.%m.%Y") {
     str <- transform_unknown_dates(str, round = round, defaultYear = defaultYear)
   } # Change date format from d.m.Y to Y-m-d and keep as strings to keep Unkonwn
-  else if (toStr & format == "%d.%m.%Y") { # ??? unknown should not exist here. Why to revert order if they're strings?
+  else if (toStr && format == "%d.%m.%Y") { # ??? unknown should not exist here. Why to revert order if they're strings?
     str <- sapply(lapply(strsplit(str, "\\."), rev), paste, collapse = "-")
     # Paste change NA to string NA => need to retransform in NA
     is.na(str) <- str == "NA"
@@ -129,10 +130,26 @@ dates_in_bounds <- function(dates, bound0, bound1) {
   return(dates >= bound0 & dates <= bound1)
 }
 
+#' Ensure an output directory exists
+#'
+#' Creates the directory at `dir_path` when it does not already exist.
+#' This helper is used by report-generation code before writing CSV or Excel
+#' outputs.
+#'
+#' @param dir_path Character scalar. Path to the directory that should exist.
+#'
+#' @return Called for its side effect. Creates the directory when needed.
+#'
+#' @examples
+#' tmp_dir <- file.path(tempdir(), "rodano-output")
+#' check_and_create_path(tmp_dir)
+#' dir.exists(tmp_dir)
+#'
+#' @export
 # Checks if directory 'dir_path' exists, and creates it if not
-check_and_create_path <- function(dir_path) {
-  if (!file.exists(dir_path)) {
-    dir.create(dir_path)
+check_and_create_path <- function(dirPath) {
+  if (!file.exists(dirPath)) {
+    dir.create(dirPath)
   }
 }
 
@@ -141,10 +158,10 @@ check_and_create_path <- function(dir_path) {
 #        - 'report_type': type of report (e.g. 'data_validation', 'data_listing')
 #        - 'documentName': name of the report
 #        - 'extension': format of the output file
-#        - 'outDir': path where the report will be saved
+#        - 'outDir': required path where the report will be saved
 #        - (optional) 'outDate': date the output was computed. If NULL, "now" is used
 # Output: Complete file name including path, composed of projectname, report_type, documentName, today's date and extension
-build_output_filename <- function(projectName, report_type, documentName, extension, outDir = dir.output, outDate = now) {
+build_output_filename <- function(projectName, reportType, documentName, extension, outDir, outDate = now) {
   name <- paste(projectName, documentName, format(outDate, format = "%Y-%m-%d"), sep = "_")
   name <- paste(sprintf("%s/%s", outDir, name), extension, sep = ".")
   return(name)
@@ -282,120 +299,121 @@ shift <- function(x, i = 1) {
   return(x[c((n - i + 1):n, 1:(n - i))])
 }
 
-print_table_to_csv <- function(project_name, report_type, tableresult, check_id, previous_report_folder, out_date = out_date, output_path = output_path) {
-  if (nrow(tableresult) > 0) {
-    tableresult$check_id <- check_id # include md5 for check id
-    tableresult$id <- md5(apply(tableresult, 1, paste, collapse = "")) # id unique for each entry of each check
+print_table_to_csv <- function(projectName, reportType, tableResult, checkId, previousReportFolder, outDate = outDate, outputPath = outputPath) {
+  if (nrow(tableResult) > 0) {
+    tableResult$check_id <- checkId # include md5 for check id
+    tableResult$id <- openssl::md5(apply(tableResult, 1, paste, collapse = "")) # id unique for each entry of each check
     # TODO: change ID system so that there will be a match if the columns are variable... maybe also filter results on update time...
 
-    tableresult <- tableresult[, c(ncol(tableresult), 1:(ncol(tableresult) - 2))] # Place row id at the begining and remove check id
-    tableresult <- tableresult[order(tableresult[, 2], tableresult[, 1]), ] # Order first by patient code then by row id
+    tableResult <- tableResult[, c(ncol(tableResult), 1:(ncol(tableResult) - 2))] # Place row id at the begining and remove check id
+    tableResult <- tableResult[order(tableResult[, 2], tableResult[, 1]), ] # Order first by patient code then by row id
 
     # Compare with previous result, if any
-    tableresult$resolved <- rep(FALSE, nrow(tableresult)) # Suppose all findings are new, for now
-    tableresult$comment <- rep("", nrow(tableresult)) # Set empty comments, for now
+    tableResult$resolved <- rep(FALSE, nrow(tableResult)) # Suppose all findings are new, for now
+    tableResult$comment <- rep("", nrow(tableResult)) # Set empty comments, for now
 
-    filename_previous <- build_output_filename(project_name, report_type, check_id, "csv", previous_report_folder$folder_path, previous_report_folder$date) # Get path to previous results
+    filename_previous <- build_output_filename(projectName, reportType, checkId, "csv", previousReportFolder$folder_path, previousReportFolder$date) # Get path to previous results
     if (file.exists(filename_previous)) { # Check if there was any prior findings file
-      tableresult_previous <- read.csv(filename_previous)
+      tableResultPrevious <- read.csv(filename_previous)
       # Was this finding resolved in the past already?
       # Where result is found in previous result, retrieve its previous 'resolved' value.
       # (Note: sort = FALSE ensures output of merge has same order as dataframe 'x' (i.e. tableresult) so that replacement will be made in the correct rows)
-      tableresult[
-        tableresult$id %in% tableresult_previous$id,
+      tableResult[
+        tableResult$id %in% tableResultPrevious$id,
         c("resolved", "comment")
       ] <- merge(
-        x = tableresult,
-        y = tableresult_previous,
+        x = tableResult,
+        y = tableResultPrevious,
         all = FALSE,
         by = "id",
         sort = FALSE
       )[, c("resolved.y", "comment.y")]
     }
 
-    filename <- build_output_filename(projectName = project_name, report_type = report_type, documentName = check_id, extension = "csv", outDate = out_date, outDir = output_path)
+    filename <- build_output_filename(projectName = projectName, reportType = reportType, documentName = checkId, extension = "csv", outDate = outDate, outDir = outputPath)
 
-    write.csv(x = tableresult, file = filename, row.names = FALSE, na = "") # Print result as csv table
-    return(tableresult)
+    write.csv(x = tableResult, file = filename, row.names = FALSE, na = "") # Print result as csv table
+    return(tableResult)
   }
 }
 
 
-report_findings <- function(project_name, report_name, results, out_date = today) {
+report_findings <- function(projectName, reportName, results, outDir, outDate = today) {
+
   # build (and create) output folder
-  output_path <- sprintf("%s/%s", dir.output, paste(out_date, report_name, sep = "_"))
-  check_and_create_path(output_path)
+  outputPath <- sprintf("%s/%s", outDir, paste(outDate, reportName, sep = "_"))
+  check_and_create_path(outputPath)
 
   # get previous reports
-  previous_report_folder <- get_previous_report_folder(project_name, report_name)
+  previousReportFolder <- get_previous_report_folder(projectName, reportName, outDate = outDate, outDir = outDir)
 
   # iterate over list of check results
-  summary_results <- do.call(
+  summaryResults <- do.call(
     rbind.data.frame,
     lapply(results, function(result) {
       # write findings
-      tmpdf <- print_table_to_csv(
-        project_name = project_name,
-        tableresult = result[["table_result"]],
-        check_id = result[["check_id"]],
-        previous_report_folder = previous_report_folder,
-        out_date = out_date,
-        output_path = output_path
+      tmpDf <- print_table_to_csv(
+        projectName = projectName,
+        tableResult = result[["table_result"]],
+        checkId = result[["check_id"]],
+        previousReportFolder = previousReportFolder,
+        outDate = outDate,
+        outputPath = outputPath
       )
       # build summary df
       return(list(
         check_id = result[["check_id"]], description = result[["description"]],
-        observations = ifelse(is.null(tmpdf), 0, nrow(tmpdf)),
-        unresolved_issues = ifelse(is.null(tmpdf), 0, nrow(tmpdf[!as.logical(tmpdf$resolved), ]))
+        observations = ifelse(is.null(tmpDf), 0, nrow(tmpDf)),
+        unresolved_issues = ifelse(is.null(tmpDf), 0, nrow(tmpDf[!as.logical(tmpDf$resolved), ]))
       ))
     })
   )
   # compare with previous summary, if any
-  previous_report_folder <- get_previous_report_folder(project_name, report_name)
-  latest_summary <- build_output_filename(
-    projectName = project_name,
-    report_type = report_name,
-    outDir = previous_report_folder$folder_path,
-    documentName = sprintf("%s_summary", report_name),
+  previousReportFolder <- get_previous_report_folder(projectName, reportName, outDate = outDate, outDir = outDir)
+  latestSummary <- build_output_filename(
+    projectName = projectName,
+    reportType = reportName,
+    outDir = previousReportFolder$folder_path,
+    documentName = sprintf("%s_summary", reportName),
     extension = "csv",
-    outDate = previous_report_folder$date
+    outDate = previousReportFolder$date
   )
 
   if (
-    file.exists(latest_summary)
+    file.exists(latestSummary)
   ) {
     # read previous summary
-    previous_summary <- read.csv(latest_summary, stringsAsFactors = FALSE)
+    previousSummary <- read.csv(latestSummary, stringsAsFactors = FALSE)
     # merge with current summary
-    summary_results <- merge(
-      x = summary_results,
-      y = previous_summary[
+    summaryResults <- merge(
+      x = summaryResults,
+      y = previousSummary[
         , # do not want column description
         c("check_id", "observations", "unresolved_issues")
       ],
       by = "check_id",
       all.x = TRUE,
-      suffixes = c("", paste("_", previous_report_folder$date))
+      suffixes = c("", paste("_", previousReportFolder$date))
     )
     # compute changes
-    summary_results$observations_change <- summary_results$observations - summary_results[, paste("observations_", previous_report_folder$date)]
-    summary_results$unresolved_issues_change <- summary_results$unresolved_issues - summary_results[, paste("unresolved_issues_", previous_report_folder$date)]
+    summaryResults$observations_change <- summaryResults$observations - summaryResults[, paste("observations_", previousReportFolder$date)]
+    summaryResults$unresolved_issues_change <- summaryResults$unresolved_issues - summaryResults[, paste("unresolved_issues_", previousReportFolder$date)]
   } else {
     # no previous summary, set changes to 0
-    summary_results$observations_change <- 0
-    summary_results$unresolved_issues_change <- 0
+    summaryResults$observations_change <- 0
+    summaryResults$unresolved_issues_change <- 0
   }
 
   # write summary results
   write.table(
-    x = summary_results,
+    x = summaryResults,
     file = build_output_filename(
-      projectName = project_name,
-      report_type = report_name,
-      outDir = output_path,
-      documentName = sprintf("%s_summary", report_name),
+      projectName = projectName,
+      reportType = reportName,
+      outDir = outputPath,
+      documentName = sprintf("%s_summary", reportName),
       extension = "csv",
-      outDate = out_date
+      outDate = outDate
     ),
     sep = ",",
     row.names = FALSE
@@ -406,9 +424,10 @@ report_findings <- function(project_name, report_name, results, out_date = today
 # Input: - 'projectName': name of the project
 #        - 'report_name': type of report (e.g. 'data_validation', 'data_listing')
 #        - 'out_date': date of current report. Only folders created before this date will be considered.
-get_previous_report_folder <- function(projectname, report_name, out_date = today) {
-  # pattern_file <- sprintf("%s_%s_summary.*\\.csv", projectname, document_name)
-  files <- list.dirs(dir.output, full.names = TRUE, recursive = FALSE)
+get_previous_report_folder <- function(projectName, reportName, outDir, outDate = today) {
+
+  # pattern_file <- sprintf("%s_%s_summary.*\\.csv", projectName, documentName)
+  files <- list.dirs(outDir, full.names = TRUE, recursive = FALSE)
   date_pattern <- "\\d{4}-\\d{2}-\\d{2}"
 
   # Extract date from each folder name using the pattern
@@ -421,7 +440,7 @@ get_previous_report_folder <- function(projectname, report_name, out_date = toda
   })
 
   # Convert to Date and filter by report_name and before out_date
-  valid_idx <- !is.na(folder_dates) & grepl(report_name, basename(files)) & as.Date(folder_dates) < as.Date(out_date)
+  valid_idx <- !is.na(folder_dates) & grepl(reportName, basename(files)) & as.Date(folder_dates) < as.Date(outDate)
   if (!any(valid_idx)) {
     return(NULL)
   }
@@ -442,33 +461,33 @@ get_previous_report_folder <- function(projectname, report_name, out_date = toda
 # Checks if two periods p1 and o2 overlap given their start dates start_p1 and start_p2
 # and end date end_p2, with start_p1 <= start_p2.
 # If an end date is NA, the period is considered ongoing.
-periods_overlap <- function(start_p1, end_p1, start_p2, end_p2) {
-  (start_p1 <= start_p2) &
-    (is.na(end_p1) | end_p1 >= start_p2)
+periods_overlap <- function(startP1, endP1, startP2, endP2) {
+  (startP1 <= startP2) &
+    (is.na(endP1) | endP1 >= startP2)
 }
 
 
 # Add a parent scope (center) column to a dataframe of child scope (patients)
 # Input: - 'df': dataframe to which the parent scope column will be added
 add_parent_scope <- function(transfers,
-                             scope_model_id_trans = "Patient",
-                             parent_scope_model_id_trans = "Center",
+                             scopeModelIdTrans = "Patient",
+                             parentScopeModelIdTrans = "Center",
                              df,
-                             scope_model_id_df = "PATIENT",
-                             parent_scope_model_id_df = "CENTER",
-                             parent_code_pattern = "^....") {
+                             scopeModelIdDf = "PATIENT",
+                             parentScopeModelIdDf = "CENTER",
+                             parentCodePattern = "^....") {
   # Extract parent code from child code
   parent_substr <- rep(NA_character_, nrow(df))
-  not_na_idx <- !is.na(df[[scope_model_id_df]])
+  not_na_idx <- !is.na(df[[scopeModelIdDf]])
   parent_substr[not_na_idx] <- regmatches(
-    df[[scope_model_id_df]][not_na_idx],
-    regexpr(pattern = parent_code_pattern, df[[scope_model_id_df]][not_na_idx], perl = TRUE)
+    df[[scopeModelIdDf]][not_na_idx],
+    regexpr(pattern = parentCodePattern, df[[scopeModelIdDf]][not_na_idx], perl = TRUE)
   )
-  df[[parent_scope_model_id_df]] <- parent_substr
+  df[[parentScopeModelIdDf]] <- parent_substr
   transfers <- transfers[is.na(transfers[["Stop date"]]), ]
-  df[[parent_scope_model_id_df]] <- ifelse(df[[scope_model_id_df]] %in% transfers[[scope_model_id_trans]],
-    transfers[[parent_scope_model_id_trans]][match(df[[scope_model_id_df]], transfers[[scope_model_id_trans]])],
-    df[[parent_scope_model_id_df]]
+  df[[parentScopeModelIdDf]] <- ifelse(df[[scopeModelIdDf]] %in% transfers[[scopeModelIdTrans]],
+    transfers[[parentScopeModelIdTrans]][match(df[[scopeModelIdDf]], transfers[[scopeModelIdTrans]])],
+    df[[parentScopeModelIdDf]]
   )
   # Move last  into first position
   df <- df[, c(ncol(df), 1:(ncol(df) - 1))]
@@ -478,15 +497,16 @@ add_parent_scope <- function(transfers,
 ############################################################################
 # Reports findings to Excel workbook with each check as a separate sheet
 # Reads previous Excel report to compare with current report
-report_metrics_diff_excel <- function(project_name, report_name, results, out_date = today, date_previous_report = NULL) {
+report_metrics_diff_excel <- function(projectName, reportName, results, outDir, outDate = today, datePreviousReport = NULL) {
+
   # read the previous report
   previous_report <- build_output_filename(
-    projectName = project_name,
-    report_type = report_name,
-    outDir = dir.output,
-    documentName = report_name,
+    projectName = projectName,
+    reportType = reportName,
+    outDir = outDir,
+    documentName = reportName,
     extension = "xlsx",
-    outDate = date_previous_report
+    outDate = datePreviousReport
   )
   # try to read the previous report, if it doesn't exists return results as is
   if (!file.exists(previous_report)) {
@@ -536,7 +556,7 @@ report_metrics_diff_excel <- function(project_name, report_name, results, out_da
         merged_df <- merged_df[, !grepl("\\.prev$", colnames(merged_df))]
 
         # set the name of the diff column
-        colnames(merged_df)[colnames(merged_df) == "diff"] <- paste("Difference since", date_previous_report)
+        colnames(merged_df)[colnames(merged_df) == "diff"] <- paste("Difference since", datePreviousReport)
         return(merged_df)
       } else {
         return(df)

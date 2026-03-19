@@ -27,6 +27,7 @@
     \item \code{get_connection_token()}: Retrieve authentication token
     \item \code{get_connection_robot()}: Get robot connection
     \item \code{get_extract()}: Pull data extracts
+    \item \code{get_transfers()}: Retrieve transfers report
     \item \code{get_report()}: Retrieve reports
     \item \code{build_url()}: Build API URLs
     \item \code{build_payload()}: Build request payloads
@@ -40,7 +41,7 @@
 }
 \keyword{ package }
 \seealso{
-  \code{\link{get_connection_token}}, \code{\link{get_extract}}
+  \code{\link{check_and_create_path}}
 }
 \examples{
   # Connect to Rodano API

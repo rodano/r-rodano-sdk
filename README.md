@@ -60,6 +60,19 @@ config <- get_config("https://study.rodano.ch/api", auth)
 data <- get_extract("https://study.rodano.ch/api", auth, "extract_name")
 ```
 
+## Helper Utilities
+
+The package also exports small report-generation helpers. For example,
+`check_and_create_path()` ensures that an output directory exists before files
+are written:
+
+```r
+library(rodano)
+
+out_dir <- file.path(tempdir(), "rodano-output")
+check_and_create_path(out_dir)
+```
+
 ## Login Management
 
 The SDK provides secure authentication methods to connect to the Rodano platform. It supports user login, session management, and token-based authentication to ensure that only authorized users can access and modify data.
