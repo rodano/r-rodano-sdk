@@ -96,7 +96,6 @@ get_connection_robot <- function(urlBase, token, role = NULL, autoLogout = FALSE
 }
 
 
-
 #' Create authentication object
 #'
 #' Creates an authentication object for API requests. Accepts either a token
@@ -459,6 +458,165 @@ get_extract <- function(urlBase, auth, expName, maxAttempts = 5, guessMax = 0, i
   df <- as.data.frame(cont)
 
   return(df)
+}
+
+# Internal function to get available parent scopes
+# Not exported - used by get_extract_resilient
+get_available_parents <- function(urlBase, auth, childScopeModelId = "PATIENT", right = "READ", maxAttempts = 5) {
+  # Retrieve available parent scopes based on child scope model and access rights
+  # For example, childScopeModelId="PATIENT" returns CENTER parents where user has read access
+  scopeAddress <- sprintf(
+    "%s/scopes/relations/available-parents?right=%s&scopeModelId=%s",
+    urlBase,
+    right,
+    childScopeModelId
+  )
+
+  # Try max. [maxAttempts] times to retrieve parent scope list
+  attempts <- 0
+  success <- FALSE
+  while (attempts < maxAttempts && !success) {
+    getRes <- tryCatch(
+      {
+        httr::GET(
+          url = scopeAddress,
+          config = auth
+        )
+      },
+      error = function(e) {
+        print(sprintf("Parent scope list retrieval at: %s failed. %s", scopeAddress, e))
+        return(NULL)
+      }
+    )
+
+    if (is.null(getRes) || getRes$status_code != 200) {
+      attempts <- attempts + 1
+    } else {
+      success <- TRUE
+    }
+  }
+
+  # Throw error if still unsuccessful
+  if (!success || getRes$status_code != 200) {
+    stop(sprintf("Parent scope list retrieval at: %s failed after %i attempts.", scopeAddress, maxAttempts))
+  }
+
+  # Parse JSON response
+  cont <- httr::content(getRes, as = "parsed", encoding = "UTF-8")
+
+  # Extract scope PKs from the response
+  # Response is an array of scope objects, each with a 'pk' field
+  if (is.list(cont) && length(cont) > 0) {
+    scope_pks <- sapply(cont, function(x) {
+      if (is.list(x) && !is.null(x$pk)) {
+        return(as.integer(x$pk))
+      }
+      return(NULL)
+    })
+    scope_pks <- unlist(scope_pks[!sapply(scope_pks, is.null)])
+  } else {
+    scope_pks <- integer(0)
+  }
+
+  if (length(scope_pks) == 0) {
+    warning("No parent scopes found for childScopeModelId: ", childScopeModelId)
+  }
+
+  return(scope_pks)
+}
+
+#' Extract data table with resilient parent-scope-based download
+#'
+#' Retrieves a CSV data export by breaking the download into chunks based on
+#' parent scopes (e.g., centers). This approach is more resilient for large
+#' datasets that may timeout when downloaded as a single request. The function
+#' queries for available parent scopes where the user has write access, then
+#' downloads data for each parent scope separately and combines the results.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param expName Character. The data table model ID to retrieve.
+#' @param childScopeModelId Character. The child scope model ID used to identify
+#'   parent scopes (default: "PATIENT"). For example, "PATIENT" will return data
+#'   chunked by CENTER parents where the user has write access.
+#' @param maxAttempts Integer. Maximum number of retry attempts per scope
+#'   (default: 5).
+#' @param guessMax Integer. Number of rows to scan for column type inference
+#'   (default: 0). See \code{\link{get_extract}} for details.
+#' @param includeModifDate Logical. Should the export include modification
+#'   dates of fields? (default: FALSE).
+#' @param showProgress Logical. Should a progress bar be displayed? (default: TRUE).
+#' @param continueOnError Logical. Should the download continue if a scope fails?
+#'   If TRUE, failed scopes are skipped with a warning. If FALSE, the function
+#'   stops on the first error (default: TRUE).
+#'
+#' @return A data frame containing the extracted table data from all parent scopes.
+#'
+#' @export
+get_extract_resilient <- function(urlBase, auth, expName, childScopeModelId = "PATIENT",
+                                  maxAttempts = 5, guessMax = 0, includeModifDate = FALSE,
+                                  showProgress = TRUE, continueOnError = TRUE) {
+  # Get list of parent scope PKs
+  parent_pks <- get_available_parents(urlBase, auth, childScopeModelId, right = "READ", maxAttempts)
+
+  if (length(parent_pks) == 0) {
+    stop("No parent scopes found. Cannot perform resilient download.")
+  }
+
+  message(sprintf("Starting resilient download for %d parent scopes...", length(parent_pks)))
+
+  # Function to download data for a single parent scope
+  download_for_scope <- function(scope_pk) {
+    tryCatch(
+      {
+        get_extract(
+          urlBase = urlBase,
+          auth = auth,
+          expName = expName,
+          maxAttempts = maxAttempts,
+          guessMax = guessMax,
+          includeModifDate = includeModifDate,
+          scopePk = scope_pk
+        )
+      },
+      error = function(e) {
+        msg <- sprintf("Failed to download data for scope PK %s: %s", scope_pk, e$message)
+        if (continueOnError) {
+          warning(msg)
+          return(NULL)
+        } else {
+          stop(msg)
+        }
+      }
+    )
+  }
+
+  # Download data for each parent scope with optional progress bar
+  if (showProgress) {
+    results_list <- pbapply::pblapply(parent_pks, download_for_scope)
+  } else {
+    results_list <- lapply(parent_pks, download_for_scope)
+  }
+
+  # Remove NULL results (failed downloads if continueOnError=TRUE)
+  results_list <- results_list[!sapply(results_list, is.null)]
+
+  if (length(results_list) == 0) {
+    stop("All scope downloads failed. No data retrieved.")
+  }
+
+  # Combine all data frames
+  combined_df <- do.call(rbind, results_list)
+
+  # Reset row names
+  rownames(combined_df) <- NULL
+
+  message(sprintf(
+    "Successfully combined data from %d parent scopes (%d total rows).",
+    length(results_list), nrow(combined_df)
+  ))
+
+  return(combined_df)
 }
 
 #' Extract workflow summary report

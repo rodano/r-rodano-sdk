@@ -1,0 +1,9 @@
+# Example .Renviron configuration for Rodano SDK tests
+# Copy this to ~/.Renviron and fill in your credentials
+
+# API URL - defaults to validation instance if not set
+RODANO_API_URL=https://test.rodano.ch/api
+
+# Required: Your credentials
+RODANO_EMAIL=test+test-admin@rodano.ch
+RODANO_PASSWORD=Password1!

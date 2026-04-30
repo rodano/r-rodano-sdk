@@ -585,7 +585,7 @@ report_findings <- function(projectName, reportName, results, outDir, outDate = 
   )
   # compare with previous summary, if any
   previousReportFolder <- get_previous_report_folder(projectName, reportName, outDate = outDate, outDir = outDir)
-  
+
   if (!is.null(previousReportFolder)) {
     latestSummary <- build_output_filename(
       projectName = projectName,
@@ -851,8 +851,7 @@ report_metrics_diff_excel <- function(projectName, reportName, results, outDir, 
       } else {
         return(df)
       }
-    } else {
-    }
+    } else {}
   })
   # set the names of the output list
   names(out) <- names(results)

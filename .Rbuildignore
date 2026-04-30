@@ -1,10 +1,12 @@
+^renv$
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^\.git$
 ^\.gitignore$
 ^\.lintr$
-^renv$
+^renv/
 ^renv\.lock$
 ^\.Rprofile$
 ^README\.md$
 ^LICENSE\.md$
+^migration/
