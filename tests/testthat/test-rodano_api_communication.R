@@ -18,17 +18,17 @@ source("config.R")
 get_test_auth <- function() {
   skip_on_cran()
   skip_if_offline()
-  
+
   creds <- get_test_credentials()
-  
+
   if (is.null(creds)) {
     skip("RODANO_EMAIL and RODANO_PASSWORD environment variables not set")
   }
-  
+
   urlBase <- get_test_url()
   token <- get_connection_token(urlBase, email = creds$email, pwd = creds$pwd)
   auth <- create_authentication(list(Token = token))
-  
+
   return(list(auth = auth, urlBase = urlBase))
 }
 
@@ -38,7 +38,7 @@ get_test_auth <- function() {
 
 test_that("get_extract retrieves data successfully", {
   conn <- get_test_auth()
-  
+
   result <- tryCatch(
     get_extract(
       urlBase = conn$urlBase,
@@ -49,14 +49,14 @@ test_that("get_extract retrieves data successfully", {
       skip(paste("Could not retrieve extract:", e$message))
     }
   )
-  
+
   expect_s3_class(result, "data.frame")
   expect_true(ncol(result) > 0)
 })
 
 test_that("get_extract works with includeModifDate parameter", {
   conn <- get_test_auth()
-  
+
   result <- tryCatch(
     get_extract(
       urlBase = conn$urlBase,
@@ -68,13 +68,13 @@ test_that("get_extract works with includeModifDate parameter", {
       skip(paste("Could not retrieve extract:", e$message))
     }
   )
-  
+
   expect_s3_class(result, "data.frame")
 })
 
 test_that("get_extract throws error for invalid dataset", {
   conn <- get_test_auth()
-  
+
   expect_error(
     get_extract(
       urlBase = conn$urlBase,
@@ -91,19 +91,19 @@ test_that("get_extract throws error for invalid dataset", {
 
 test_that("get_extract_resilient retrieves data successfully with default parameters", {
   conn <- get_test_auth()
-  
+
   result <- tryCatch(
     get_extract_resilient(
       urlBase = conn$urlBase,
       auth = conn$auth,
       expName = get_test_big_dataset(),
-      showProgress = FALSE  # Disable progress bar for testing
+      showProgress = FALSE # Disable progress bar for testing
     ),
     error = function(e) {
       skip(paste("Could not retrieve resilient extract:", e$message))
     }
   )
-  
+
   expect_s3_class(result, "data.frame")
   expect_true(nrow(result) >= 0)
   expect_true(ncol(result) > 0)
@@ -111,7 +111,7 @@ test_that("get_extract_resilient retrieves data successfully with default parame
 
 test_that("get_extract_resilient works with includeModifDate parameter", {
   conn <- get_test_auth()
-  
+
   result <- tryCatch(
     get_extract_resilient(
       urlBase = conn$urlBase,
@@ -124,13 +124,13 @@ test_that("get_extract_resilient works with includeModifDate parameter", {
       skip(paste("Could not retrieve resilient extract:", e$message))
     }
   )
-  
+
   expect_s3_class(result, "data.frame")
 })
 
 test_that("get_extract_resilient works with different childScopeModelId", {
   conn <- get_test_auth()
-  
+
   # Try with different scope model ID
   result <- tryCatch(
     get_extract_resilient(
@@ -144,13 +144,13 @@ test_that("get_extract_resilient works with different childScopeModelId", {
       skip(paste("Could not retrieve resilient extract with custom scope model:", e$message))
     }
   )
-  
+
   expect_s3_class(result, "data.frame")
 })
 
 test_that("get_extract_resilient continues on error when continueOnError=TRUE", {
   conn <- get_test_auth()
-  
+
   # This test verifies that the function continues despite errors
   # We can't easily force an error on specific scopes in integration tests,
   # but we can verify the function completes successfully with continueOnError=TRUE
@@ -166,13 +166,13 @@ test_that("get_extract_resilient continues on error when continueOnError=TRUE", 
       skip(paste("Could not retrieve resilient extract:", e$message))
     }
   )
-  
+
   expect_s3_class(result, "data.frame")
 })
 
 test_that("get_extract_resilient returns combined data from multiple scopes", {
   conn <- get_test_auth()
-  
+
   result <- tryCatch(
     get_extract_resilient(
       urlBase = conn$urlBase,
@@ -184,10 +184,10 @@ test_that("get_extract_resilient returns combined data from multiple scopes", {
       skip(paste("Could not retrieve resilient extract:", e$message))
     }
   )
-  
+
   # Verify structure
   expect_s3_class(result, "data.frame")
-  
+
   # Verify row names are reset (not duplicated from original dfs)
   if (nrow(result) > 0) {
     expect_true(all(rownames(result) == as.character(seq_len(nrow(result)))))
@@ -196,7 +196,7 @@ test_that("get_extract_resilient returns combined data from multiple scopes", {
 
 test_that("get_extract_resilient fails appropriately when no parent scopes found", {
   conn <- get_test_auth()
-  
+
   # Test with an invalid childScopeModelId that has no parent scopes
   expect_error(
     get_extract_resilient(
@@ -211,3 +211,199 @@ test_that("get_extract_resilient fails appropriately when no parent scopes found
   )
 })
 
+# ============================================================================
+# Tests for get_report
+# ============================================================================
+
+test_that("get_report retrieves data successfully with default parameters", {
+  conn <- get_test_auth()
+
+  result <- tryCatch(
+    get_report(
+      urlBase = conn$urlBase,
+      auth = conn$auth,
+      repName = get_test_report()
+    ),
+    error = function(e) {
+      skip(paste("Could not retrieve report:", e$message))
+    }
+  )
+
+  expect_s3_class(result, "data.frame")
+  expect_true(ncol(result) > 0)
+})
+
+test_that("get_report works with withHistory parameter", {
+  conn <- get_test_auth()
+
+  result <- tryCatch(
+    get_report(
+      urlBase = conn$urlBase,
+      auth = conn$auth,
+      repName = get_test_report(),
+      withHistory = TRUE
+    ),
+    error = function(e) {
+      skip(paste("Could not retrieve report with history:", e$message))
+    }
+  )
+
+  expect_s3_class(result, "data.frame")
+})
+
+test_that("get_report works with custom scopePk", {
+  conn <- get_test_auth()
+
+  result <- tryCatch(
+    get_report(
+      urlBase = conn$urlBase,
+      auth = conn$auth,
+      repName = get_test_report(),
+      scopePk = 1
+    ),
+    error = function(e) {
+      skip(paste("Could not retrieve report for custom scope:", e$message))
+    }
+  )
+
+  expect_s3_class(result, "data.frame")
+})
+
+test_that("get_report throws error for invalid report name", {
+  conn <- get_test_auth()
+
+  expect_error(
+    get_report(
+      urlBase = conn$urlBase,
+      auth = conn$auth,
+      repName = "NONEXISTENT_REPORT_XYZ123",
+      maxAttempts = 1
+    )
+  )
+})
+
+# ============================================================================
+# Tests for get_report_resilient
+# ============================================================================
+
+test_that("get_report_resilient retrieves data successfully with default parameters", {
+  conn <- get_test_auth()
+
+  result <- tryCatch(
+    get_report_resilient(
+      urlBase = conn$urlBase,
+      auth = conn$auth,
+      repName = get_test_big_report(),
+      showProgress = FALSE # Disable progress bar for testing
+    ),
+    error = function(e) {
+      skip(paste("Could not retrieve resilient report:", e$message))
+    }
+  )
+
+  expect_s3_class(result, "data.frame")
+  expect_true(nrow(result) >= 0)
+  expect_true(ncol(result) > 0)
+})
+
+test_that("get_report_resilient works with withHistory parameter", {
+  conn <- get_test_auth()
+
+  result <- tryCatch(
+    get_report_resilient(
+      urlBase = conn$urlBase,
+      auth = conn$auth,
+      repName = get_test_big_report(),
+      withHistory = TRUE,
+      showProgress = FALSE
+    ),
+    error = function(e) {
+      skip(paste("Could not retrieve resilient report with history:", e$message))
+    }
+  )
+
+  expect_s3_class(result, "data.frame")
+})
+
+test_that("get_report_resilient works with different childScopeModelId", {
+  conn <- get_test_auth()
+
+  # Try with different scope model ID
+  result <- tryCatch(
+    get_report_resilient(
+      urlBase = conn$urlBase,
+      auth = conn$auth,
+      repName = get_test_big_report(),
+      childScopeModelId = "PATIENT",
+      showProgress = FALSE
+    ),
+    error = function(e) {
+      skip(paste("Could not retrieve resilient report with custom scope model:", e$message))
+    }
+  )
+
+  expect_s3_class(result, "data.frame")
+})
+
+test_that("get_report_resilient continues on error when continueOnError=TRUE", {
+  conn <- get_test_auth()
+
+  # This test verifies that the function continues despite errors
+  # We can't easily force an error on specific scopes in integration tests,
+  # but we can verify the function completes successfully with continueOnError=TRUE
+  result <- tryCatch(
+    get_report_resilient(
+      urlBase = conn$urlBase,
+      auth = conn$auth,
+      repName = get_test_big_report(),
+      continueOnError = TRUE,
+      showProgress = FALSE
+    ),
+    error = function(e) {
+      skip(paste("Could not retrieve resilient report:", e$message))
+    }
+  )
+
+  expect_s3_class(result, "data.frame")
+})
+
+test_that("get_report_resilient returns combined data from multiple scopes", {
+  conn <- get_test_auth()
+
+  result <- tryCatch(
+    get_report_resilient(
+      urlBase = conn$urlBase,
+      auth = conn$auth,
+      repName = get_test_big_report(),
+      showProgress = FALSE
+    ),
+    error = function(e) {
+      skip(paste("Could not retrieve resilient report:", e$message))
+    }
+  )
+
+  # Verify structure
+  expect_s3_class(result, "data.frame")
+
+  # Verify row names are reset (not duplicated from original dfs)
+  if (nrow(result) > 0) {
+    expect_true(all(rownames(result) == as.character(seq_len(nrow(result)))))
+  }
+})
+
+test_that("get_report_resilient fails appropriately when no parent scopes found", {
+  conn <- get_test_auth()
+
+  # Test with an invalid childScopeModelId that has no parent scopes
+  expect_error(
+    get_report_resilient(
+      urlBase = conn$urlBase,
+      auth = conn$auth,
+      repName = get_test_big_report(),
+      childScopeModelId = "NONEXISTENT_SCOPE_MODEL_XYZ",
+      showProgress = FALSE,
+      maxAttempts = 1
+    ),
+    regexp = "No parent scopes found|failed"
+  )
+})

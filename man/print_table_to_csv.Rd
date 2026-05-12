@@ -9,7 +9,7 @@ print_table_to_csv(
   tableResult,
   checkId,
   previousReportFolder,
-  outDate = today,
+  outDate = Sys.Date(),
   outputPath
 )
 }

@@ -9,7 +9,7 @@ build_output_filename(
   documentName,
   extension,
   outDir,
-  outDate = today
+  outDate = Sys.Date()
 )
 }
 \arguments{
@@ -21,7 +21,7 @@ build_output_filename(
 
 \item{outDir}{Character. Directory path where the report will be saved.}
 
-\item{outDate}{Date. Date the output was computed. Default: \code{today}
+\item{outDate}{Date. Date the output was computed. Default: \code{Sys.Date()}
 (current date).}
 }
 \value{

@@ -10,7 +10,8 @@ get_report(
   repName,
   maxAttempts = 5,
   guessMax = 0,
-  withHistory = FALSE
+  withHistory = FALSE,
+  scopePk = 1
 )
 }
 \arguments{
@@ -28,6 +29,9 @@ failure (default: 5).}
 
 \item{withHistory}{Logical. Should the export include historical workflow
 data? (default: FALSE).}
+
+\item{scopePk}{Integer. Optional scope primary key to filter the
+report to a specific scope (default: 1).}
 }
 \value{
 A data frame containing the workflow report.
