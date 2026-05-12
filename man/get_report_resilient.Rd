@@ -10,7 +10,7 @@ get_report_resilient(
   repName,
   childScopeModelId = "PATIENT",
   maxAttempts = 5,
-  guessMax = -1,
+  guessMax = 0,
   withHistory = FALSE,
   showProgress = TRUE,
   continueOnError = TRUE
@@ -31,7 +31,7 @@ chunked by CENTER parents where the user has read access.}
 (default: 5).}
 
 \item{guessMax}{Integer. Number of rows to scan for column type inference
-(default: -1). See \code{\link{get_extract}} for details.}
+(default: 0). See \code{\link{get_report}} for details.}
 
 \item{withHistory}{Logical. Should the export include historical workflow
 data? (default: FALSE).}
