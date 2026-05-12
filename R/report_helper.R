@@ -1,6 +1,3 @@
-today <- Sys.Date()
-
-
 # Performs aggregate without throwing an error if input has 0 rows
 # Input: - 'dep_colnames': name (string) or array of names of columns to summarize by aggregate function
 #        - 'indep_colnames': name (string) or array of names of columns used as grouping variables
@@ -140,9 +137,9 @@ partial_date_to_date <- function(str, format = "%d.%m.%Y", unknownDate = FALSE, 
 
   # If dates contain unknowns, remove them
   if (unknownDate && format == "%d.%m.%Y") {
+    # Change date format from d.m.Y to Y-m-d and keep as strings to keep Unknown
     str <- transform_unknown_dates(str, round = round, defaultYear = defaultYear)
-  } # Change date format from d.m.Y to Y-m-d and keep as strings to keep Unkonwn
-  else if (toStr && format == "%d.%m.%Y") { # ??? unknown should not exist here. Why to revert order if they're strings?
+  } else if (toStr && format == "%d.%m.%Y") { # ??? unknown should not exist here. Why to revert order if they're strings?
     str <- sapply(lapply(strsplit(str, "\\."), rev), paste, collapse = "-")
     # Paste change NA to string NA => need to retransform in NA
     is.na(str) <- str == "NA"
@@ -227,8 +224,7 @@ check_and_create_path <- function(dirPath) {
 #' @export
 get_check_details_discrepancy <- function(reversed, dfChecks, dfDetails, checksPidColumn, detailsPidColumn, checkColumn, checkValue, eventDateColumn, upperBoundColumn, lowerBoundColumn = NA) {
   # Selects only visits were medical event check was answered negatively
-  dfChecks <- dfChecks[!is.na(dfChecks[, checkColumn]) &
-    dfChecks[, checkColumn] == checkValue, ]
+  dfChecks <- dfChecks[!is.na(dfChecks[, checkColumn]) & dfChecks[, checkColumn] == checkValue, ]
 
   # Merge visits with any associated patient's medical event
   merged <- merge(
@@ -275,14 +271,14 @@ get_check_details_discrepancy <- function(reversed, dfChecks, dfDetails, checksP
 #' @param documentName Character. Name of the report document.
 #' @param extension Character. File format extension (without dot).
 #' @param outDir Character. Directory path where the report will be saved.
-#' @param outDate Date. Date the output was computed. Default: \code{today}
+#' @param outDate Date. Date the output was computed. Default: \code{Sys.Date()}
 #'   (current date).
 #'
 #' @return Character. Complete file path including directory, composed of
 #'   \code{projectName_documentName_date.extension}.
 #'
 #' @export
-build_output_filename <- function(projectName, documentName, extension, outDir, outDate = today) {
+build_output_filename <- function(projectName, documentName, extension, outDir, outDate = Sys.Date()) {
   name <- paste(projectName, documentName, format(outDate, format = "%Y-%m-%d"), sep = "_")
   name <- paste(sprintf("%s/%s", outDir, name), extension, sep = ".")
   return(name)
@@ -382,9 +378,9 @@ get_center_on_date <- function(trans, pat, dat, cIn, cColname = "Center") {
       trans_ <- trans[trans$Patient == p, ] # Get patient's rows
 
       if (is.na(d)) {
+        # If date is na, get first center - or last?
         c_ <- trans_[1, cColname]
-      } # If date is na, get first center - or last?
-      else {
+      } else {
         d <- transform_unknown_dates(d, round = "floor") # Format
         trans_$Matches <- (is.na(trans_$"Stop date") & (as.Date(d, "%d.%m.%Y") >= as.Date(trans_$"Start date"))) |
           ((as.Date(d, "%d.%m.%Y") <= as.Date(trans_$"Stop date")) & (as.Date(d, "%d.%m.%Y") >= as.Date(trans_$"Start date")))
@@ -487,7 +483,7 @@ shift <- function(x, i = 1) {
 #'   when \code{tableResult} has zero rows).
 #'
 #' @export
-print_table_to_csv <- function(projectName, tableResult, checkId, previousReportFolder, outDate = today, outputPath) {
+print_table_to_csv <- function(projectName, tableResult, checkId, previousReportFolder, outDate = Sys.Date(), outputPath) {
   if (nrow(tableResult) > 0) {
     tableResult$check_id <- checkId # include md5 for check id
     tableResult$id <- openssl::md5(apply(tableResult, 1, paste, collapse = "")) # id unique for each entry of each check
@@ -544,7 +540,7 @@ print_table_to_csv <- function(projectName, tableResult, checkId, previousReport
 #'   \code{description} (character).
 #' @param outDir Character. Parent directory where the dated report folder
 #'   will be created.
-#' @param outDate Date for the report (default: today). Used in folder and
+#' @param outDate Date for the report (default: Sys.Date()). Used in folder and
 #'   file names, and to locate the previous report for comparison.
 #'
 #' @return Called for its side effects: writes per-check CSV files and a
@@ -555,7 +551,7 @@ print_table_to_csv <- function(projectName, tableResult, checkId, previousReport
 #'   \code{\link{build_output_filename}}
 #'
 #' @export
-report_findings <- function(projectName, reportName, results, outDir, outDate = today) {
+report_findings <- function(projectName, reportName, results, outDir, outDate = Sys.Date()) {
   # build (and create) output folder
   outputPath <- sprintf("%s/%s", outDir, paste(outDate, reportName, sep = "_"))
   check_and_create_path(outputPath)
@@ -649,7 +645,7 @@ report_findings <- function(projectName, reportName, results, outDir, outDate = 
 #'   \code{"data_listing"}).
 #' @param outDir Character. Parent directory containing report folders.
 #' @param outDate Date. Date of current report. Only folders created before
-#'   this date will be considered. Default: \code{today}.
+#'   this date will be considered. Default: \code{Sys.Date()}.
 #'
 #' @return List with three elements:
 #'   \itemize{
@@ -661,7 +657,7 @@ report_findings <- function(projectName, reportName, results, outDir, outDate = 
 #'
 #' @keywords internal
 #' @noRd
-get_previous_report_folder <- function(projectName, reportName, outDir, outDate = today) {
+get_previous_report_folder <- function(projectName, reportName, outDir, outDate = Sys.Date()) {
   # pattern_file <- sprintf("%s_%s_summary.*\\.csv", projectName, documentName)
   files <- list.dirs(outDir, full.names = TRUE, recursive = FALSE)
   date_pattern <- "\\d{4}-\\d{2}-\\d{2}"
@@ -778,7 +774,7 @@ add_parent_scope <- function(transfers,
 #' @param results List. Named list of data frames, each representing metrics
 #'   for a specific check or sheet.
 #' @param outDir Character. Directory containing previous reports.
-#' @param outDate Date. Date for the current report. Default: \code{today}.
+#' @param outDate Date. Date for the current report. Default: \code{Sys.Date()}.
 #' @param datePreviousReport Character or Date. Date of the previous report
 #'   to compare against. If \code{NULL} or file doesn't exist, returns results
 #'   unchanged.
@@ -789,7 +785,7 @@ add_parent_scope <- function(transfers,
 #'   original results if no previous report exists.
 #'
 #' @export
-report_metrics_diff_excel <- function(projectName, reportName, results, outDir, outDate = today, datePreviousReport = NULL) {
+report_metrics_diff_excel <- function(projectName, reportName, results, outDir, outDate = Sys.Date(), datePreviousReport = NULL) {
   # read the previous report
   previous_report <- build_output_filename(
     projectName = projectName,

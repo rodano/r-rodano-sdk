@@ -4,7 +4,7 @@
 \alias{report_findings}
 \title{Run all checks and produce a findings report with summary}
 \usage{
-report_findings(projectName, reportName, results, outDir, outDate = today)
+report_findings(projectName, reportName, results, outDir, outDate = Sys.Date())
 }
 \arguments{
 \item{projectName}{Character. Name of the project.}
@@ -19,7 +19,7 @@ report_findings(projectName, reportName, results, outDir, outDate = today)
 \item{outDir}{Character. Parent directory where the dated report folder
 will be created.}
 
-\item{outDate}{Date for the report (default: today). Used in folder and
+\item{outDate}{Date for the report (default: Sys.Date()). Used in folder and
 file names, and to locate the previous report for comparison.}
 }
 \value{

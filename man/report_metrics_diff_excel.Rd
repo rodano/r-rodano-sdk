@@ -9,7 +9,7 @@ report_metrics_diff_excel(
   reportName,
   results,
   outDir,
-  outDate = today,
+  outDate = Sys.Date(),
   datePreviousReport = NULL
 )
 }
@@ -23,7 +23,7 @@ for a specific check or sheet.}
 
 \item{outDir}{Character. Directory containing previous reports.}
 
-\item{outDate}{Date. Date for the current report. Default: \code{today}.}
+\item{outDate}{Date. Date for the current report. Default: \code{Sys.Date()}.}
 
 \item{datePreviousReport}{Character or Date. Date of the previous report
 to compare against. If \code{NULL} or file doesn't exist, returns results
