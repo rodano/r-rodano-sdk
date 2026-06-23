@@ -9,7 +9,7 @@ get_extract(
   auth,
   expName,
   maxAttempts = 5,
-  guessMax = 0,
+  guessMax = -1,
   includeModifDate = FALSE,
   scopePk = NULL
 )
@@ -30,9 +30,9 @@ examines the first N rows to infer the data type of each column (numeric,
 character, date, etc.). If later rows contain values incompatible with the
 inferred type, they may be coerced or read as NA. Options:
 \itemize{
-  \item 0 (default): Uses readr's default behavior (1,000 rows)
+  \item -1 (default): Scans all rows (most accurate, recommended for sparse data)
+  \item 0: Uses readr's default behavior (1,000 rows)
   \item Positive integer: Scans specified number of rows
-  \item -1: Scans all rows (most accurate but slowest)
 }
 Increase this value if you encounter unexpected type coercion, especially
 in datasets where certain column types only become apparent after many rows.}

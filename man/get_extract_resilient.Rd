@@ -10,7 +10,7 @@ get_extract_resilient(
   expName,
   childScopeModelId = "PATIENT",
   maxAttempts = 5,
-  guessMax = 0,
+  guessMax = -1,
   includeModifDate = FALSE,
   showProgress = TRUE,
   continueOnError = TRUE
@@ -31,7 +31,7 @@ chunked by CENTER parents where the user has write access.}
 (default: 5).}
 
 \item{guessMax}{Integer. Number of rows to scan for column type inference
-(default: 0). See \code{\link{get_extract}} for details.}
+(default: -1). See \code{\link{get_extract}} for details.}
 
 \item{includeModifDate}{Logical. Should the export include modification
 dates of fields? (default: FALSE).}

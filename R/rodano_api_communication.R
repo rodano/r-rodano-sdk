@@ -412,9 +412,9 @@ add_scope <- function(code, name, model, parentPk, urlBase, auth, criteria = NUL
 #'   character, date, etc.). If later rows contain values incompatible with the
 #'   inferred type, they may be coerced or read as NA. Options:
 #'   \itemize{
-#'     \item 0 (default): Uses readr's default behavior (1,000 rows)
+#'     \item -1 (default): Scans all rows (most accurate, recommended for sparse data)
+#'     \item 0: Uses readr's default behavior (1,000 rows)
 #'     \item Positive integer: Scans specified number of rows
-#'     \item -1: Scans all rows (most accurate but slowest)
 #'   }
 #'   Increase this value if you encounter unexpected type coercion, especially
 #'   in datasets where certain column types only become apparent after many rows.
@@ -426,7 +426,7 @@ add_scope <- function(code, name, model, parentPk, urlBase, auth, criteria = NUL
 #' @return A data frame containing the extracted table data.
 #'
 #' @export
-get_extract <- function(urlBase, auth, expName, maxAttempts = 5, guessMax = 0, includeModifDate = FALSE, scopePk = NULL) {
+get_extract <- function(urlBase, auth, expName, maxAttempts = 5, guessMax = -1, includeModifDate = FALSE, scopePk = NULL) {
   expAddress <- sprintf(
     "%s/extracts?datasetModelIds=%s%s%s",
     urlBase,
@@ -555,7 +555,7 @@ get_available_parents <- function(urlBase, auth, childScopeModelId = "PATIENT", 
 #' @param maxAttempts Integer. Maximum number of retry attempts per scope
 #'   (default: 5).
 #' @param guessMax Integer. Number of rows to scan for column type inference
-#'   (default: 0). See \code{\link{get_extract}} for details.
+#'   (default: -1). See \code{\link{get_extract}} for details.
 #' @param includeModifDate Logical. Should the export include modification
 #'   dates of fields? (default: FALSE).
 #' @param showProgress Logical. Should a progress bar be displayed? (default: TRUE).
@@ -567,7 +567,7 @@ get_available_parents <- function(urlBase, auth, childScopeModelId = "PATIENT", 
 #'
 #' @export
 get_extract_resilient <- function(urlBase, auth, expName, childScopeModelId = "PATIENT",
-                                  maxAttempts = 5, guessMax = 0, includeModifDate = FALSE,
+                                  maxAttempts = 5, guessMax = -1, includeModifDate = FALSE,
                                   showProgress = TRUE, continueOnError = TRUE) {
   # Get list of parent scope PKs
   parent_pks <- get_available_parents(urlBase, auth, childScopeModelId, right = "READ", maxAttempts)
@@ -643,7 +643,7 @@ get_extract_resilient <- function(urlBase, auth, expName, childScopeModelId = "P
 #' @param maxAttempts Integer. Maximum number of retry attempts in case of
 #'   failure (default: 5).
 #' @param guessMax Integer. Number of rows to scan for column type inference
-#'   (default: 0).
+#'   (default: -1). See \code{\link{get_extract}} for details.
 #' @param withHistory Logical. Should the export include historical workflow
 #'   data? (default: FALSE).
 #' @param scopePk Integer. Optional scope primary key to filter the
@@ -652,7 +652,7 @@ get_extract_resilient <- function(urlBase, auth, expName, childScopeModelId = "P
 #' @return A data frame containing the workflow report.
 #'
 #' @export
-get_report <- function(urlBase, auth, repName, maxAttempts = 5, guessMax = 0, withHistory = FALSE, scopePk = 1) {
+get_report <- function(urlBase, auth, repName, maxAttempts = 5, guessMax = -1, withHistory = FALSE, scopePk = 1) {
   repAddress <- sprintf("%s/widget/workflow-summary/%s/export%s?scopePk=%s", urlBase, repName, ifelse(withHistory, "/history", ""), scopePk)
 
   # Try max. [maxAttempts] times to retrieve requested report
@@ -709,7 +709,7 @@ get_report <- function(urlBase, auth, repName, maxAttempts = 5, guessMax = 0, wi
 #' @param maxAttempts Integer. Maximum number of retry attempts per scope
 #'   (default: 5).
 #' @param guessMax Integer. Number of rows to scan for column type inference
-#'   (default: 0). See \code{\link{get_report}} for details.
+#'   (default: -1). See \code{\link{get_extract}} for details.
 #' @param withHistory Logical. Should the export include historical workflow
 #'   data? (default: FALSE).
 #' @param showProgress Logical. Should a progress bar be displayed? (default: TRUE).
@@ -723,7 +723,7 @@ get_report <- function(urlBase, auth, repName, maxAttempts = 5, guessMax = 0, wi
 #'
 #' @export
 get_report_resilient <- function(urlBase, auth, repName, childScopeModelId = "PATIENT",
-                                 maxAttempts = 5, guessMax = 0, withHistory = FALSE,
+                                 maxAttempts = 5, guessMax = -1, withHistory = FALSE,
                                  showProgress = TRUE, continueOnError = TRUE) {
   # Get list of parent scope PKs
   parent_pks <- get_available_parents(urlBase, auth, childScopeModelId, right = "READ", maxAttempts)
@@ -798,12 +798,12 @@ get_report_resilient <- function(urlBase, auth, repName, childScopeModelId = "PA
 #' @param maxAttempts Integer. Maximum number of retry attempts in case of
 #'   failure (default: 5).
 #' @param guessMax Integer. Number of rows to scan for column type inference
-#'   (default: 0).
+#'   (default: -1). See \code{\link{get_extract}} for details.
 #'
 #' @return A data frame containing the widget data.
 #'
 #' @export
-get_widget <- function(urlBase, auth, widName, maxAttempts = 5, guessMax = 0) {
+get_widget <- function(urlBase, auth, widName, maxAttempts = 5, guessMax = -1) {
   widAddress <- sprintf("%s/widget/workflow/%s/export?scopePks=1", urlBase, widName)
 
   # Try max. [maxAttempts] times to retrieve requested report
@@ -854,12 +854,12 @@ get_widget <- function(urlBase, auth, widName, maxAttempts = 5, guessMax = 0) {
 #' @param maxAttempts Integer. Maximum number of retry attempts in case of
 #'   failure (default: 5).
 #' @param guessMax Integer. Number of rows to scan for column type inference
-#'   (default: 0).
+#'   (default: -1). See \code{\link{get_extract}} for details.
 #'
 #' @return A data frame containing the overdue report data.
 #'
 #' @export
-get_overdue_widget <- function(urlBase, auth, overdueWidName, maxAttempts = 5, guessMax = 0) {
+get_overdue_widget <- function(urlBase, auth, overdueWidName, maxAttempts = 5, guessMax = -1) {
   repAddress <- sprintf("%s/widget/overdue/%s/export", urlBase, overdueWidName)
 
   attempts <- 0
@@ -1027,10 +1027,75 @@ get_events <- function(urlBase, auth, maxAttempts = 5, scopeModelId = "PATIENT")
 #' @seealso \code{\link{get_extract}} for retrieving a single data table.
 #'
 #' @export
-get_extracts <- function(urlBase, auth, tableIds, includeModifDate) {
+get_extracts <- function(urlBase, auth, tableIds, includeModifDate, guessMax = -1) {
   # Get all exports
   data <- lapply(tableIds, function(datasetId) {
-    tempdf <- get_extract(urlBase, auth, datasetId, includeModifDate = includeModifDate, guessMax = 5)
+    tempdf <- get_extract(urlBase, auth, datasetId, includeModifDate = includeModifDate, guessMax = guessMax)
+    return(tempdf)
+  })
+  # Format and return the list
+  names(data) <- tolower(tableIds)
+  return(data)
+}
+
+#' Retrieve multiple data tables with resilient parent-scope-based download
+#'
+#' Retrieves data from multiple tables on the server in a batch operation using
+#' \code{\link{get_extract_resilient}}. This approach breaks downloads into chunks
+#' based on parent scopes (e.g., centers), making it more resilient for large
+#' datasets that may timeout when downloaded as single requests. Returns a named
+#' list where each element is a data frame from one table.
+#'
+#' @param urlBase Character. The base URL to the platform's API.
+#' @param auth An authentication object created by \code{\link{create_authentication}}.
+#' @param tableIds Character vector. Data table model IDs to retrieve.
+#' @param childScopeModelId Character. The child scope model ID used to identify
+#'   parent scopes (default: "PATIENT"). For example, "PATIENT" will return data
+#'   chunked by CENTER parents where the user has read access.
+#' @param includeModifDate Logical. Should exports include modification dates of
+#'   fields? (default: FALSE).
+#' @param guessMax Integer. Number of rows to scan for column type inference
+#'   (default: -1). See \code{\link{get_extract}} for details on handling sparse
+#'   data with date columns.
+#' @param showProgress Logical. Should a progress bar be displayed? (default: TRUE).
+#' @param continueOnError Logical. Should the download continue if a scope fails?
+#'   If TRUE, failed scopes are skipped with a warning for that table. If FALSE,
+#'   the function stops on the first error (default: TRUE).
+#'
+#' @return A named list of data frames, one for each table. List names are the
+#'   lowercase table IDs (e.g., \code{list(table1 = df1, table2 = df2)}).
+#'
+#' @details
+#'   This function is particularly useful when:
+#'   \itemize{
+#'     \item Working with large datasets that may timeout
+#'     \item Downloading data across multiple centers or sites
+#'     \item Needing robust error handling for partial failures
+#'   }
+#'
+#'   For smaller datasets or single-table downloads, consider using
+#'   \code{\link{get_extract}} or \code{\link{get_extract_resilient}} directly.
+#'
+#' @seealso
+#'   \code{\link{get_extracts}} for non-resilient batch downloads,
+#'   \code{\link{get_extract_resilient}} for single table with resilient download.
+#'
+#' @export
+get_extracts_resilient <- function(urlBase, auth, tableIds, childScopeModelId = "PATIENT",
+                                   includeModifDate = FALSE, guessMax = -1,
+                                   showProgress = TRUE, continueOnError = TRUE) {
+  # Get all exports using resilient method
+  data <- lapply(tableIds, function(datasetId) {
+    tempdf <- get_extract_resilient(
+      urlBase = urlBase,
+      auth = auth,
+      expName = datasetId,
+      childScopeModelId = childScopeModelId,
+      guessMax = guessMax,
+      includeModifDate = includeModifDate,
+      showProgress = showProgress,
+      continueOnError = continueOnError
+    )
     return(tempdf)
   })
   # Format and return the list

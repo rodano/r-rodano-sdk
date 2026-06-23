@@ -337,8 +337,8 @@ get_closest_event <- function(df, dateCol, targetDate, offset = NA) {
 # Returns true where a=b, a=NA and b=NA
 compna <- function(a, b) {
   ((a == b) &
-    (is.na(a) | !is.na(b)) &
-    (is.na(b) | !is.na(a))) |
+     (is.na(a) | !is.na(b)) &
+     (is.na(b) | !is.na(a))) |
     (is.na(a) & is.na(b))
 }
 

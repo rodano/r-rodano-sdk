@@ -9,7 +9,7 @@ get_overdue_widget(
   auth,
   overdueWidName,
   maxAttempts = 5,
-  guessMax = 0
+  guessMax = -1
 )
 }
 \arguments{
@@ -23,7 +23,7 @@ get_overdue_widget(
 failure (default: 5).}
 
 \item{guessMax}{Integer. Number of rows to scan for column type inference
-(default: 0).}
+(default: -1). See \code{\link{get_extract}} for details.}
 }
 \value{
 A data frame containing the overdue report data.

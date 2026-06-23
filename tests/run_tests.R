@@ -7,7 +7,7 @@
 #   Rscript run_tests.R get_extract  # Run only get_extract tests
 #
 # Requires credentials to be set:
-#   export RODANO_EMAIL="your.email@example.com"
+#   export RODANO_EMAIL="your.email@rodano.ch"
 #   export RODANO_PASSWORD="your_password"
 
 # Get command line arguments
@@ -22,7 +22,7 @@ if (!require("testthat", quietly = TRUE)) {
 if (Sys.getenv("RODANO_EMAIL") == "" || Sys.getenv("RODANO_PASSWORD") == "") {
   cat("Warning: RODANO_EMAIL and RODANO_PASSWORD not set. Tests will be skipped.\n")
   cat("Set credentials with:\n")
-  cat("  export RODANO_EMAIL=\"your.email@example.com\"\n")
+  cat("  export RODANO_EMAIL=\"your.email@rodano.ch\"\n")
   cat("  export RODANO_PASSWORD=\"your_password\"\n\n")
 }
 

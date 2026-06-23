@@ -9,7 +9,7 @@ get_report(
   auth,
   repName,
   maxAttempts = 5,
-  guessMax = 0,
+  guessMax = -1,
   withHistory = FALSE,
   scopePk = 1
 )
@@ -25,7 +25,7 @@ get_report(
 failure (default: 5).}
 
 \item{guessMax}{Integer. Number of rows to scan for column type inference
-(default: 0).}
+(default: -1). See \code{\link{get_extract}} for details.}
 
 \item{withHistory}{Logical. Should the export include historical workflow
 data? (default: FALSE).}

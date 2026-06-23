@@ -4,7 +4,7 @@
 \alias{get_widget}
 \title{Extract workflow widget data}
 \usage{
-get_widget(urlBase, auth, widName, maxAttempts = 5, guessMax = 0)
+get_widget(urlBase, auth, widName, maxAttempts = 5, guessMax = -1)
 }
 \arguments{
 \item{urlBase}{Character. The base URL to the platform's API.}
@@ -17,7 +17,7 @@ get_widget(urlBase, auth, widName, maxAttempts = 5, guessMax = 0)
 failure (default: 5).}
 
 \item{guessMax}{Integer. Number of rows to scan for column type inference
-(default: 0).}
+(default: -1). See \code{\link{get_extract}} for details.}
 }
 \value{
 A data frame containing the widget data.

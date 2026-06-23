@@ -4,7 +4,7 @@
 \alias{get_extracts}
 \title{Retrieve multiple data tables}
 \usage{
-get_extracts(urlBase, auth, tableIds, includeModifDate)
+get_extracts(urlBase, auth, tableIds, includeModifDate, guessMax = -1)
 }
 \arguments{
 \item{urlBase}{Character. The base URL to the platform's API.}
