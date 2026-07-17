@@ -538,6 +538,9 @@ print_table_to_csv <- function(projectName, tableResult, checkId, previousReport
 #' @param results A list of check results. Each element must be a list with
 #'   \code{table_result} (data frame), \code{check_id} (character), and
 #'   \code{description} (character).
+#' @param previousReportDate Date, or \code{NULL}. Date of the
+#'   previous report to use for comparison. If \code{NULL} (default), the
+#'   function will automatically search for the most recent previous report.
 #' @param outDir Character. Parent directory where the dated report folder
 #'   will be created.
 #' @param outDate Date for the report (default: Sys.Date()). Used in folder and
@@ -551,13 +554,30 @@ print_table_to_csv <- function(projectName, tableResult, checkId, previousReport
 #'   \code{\link{build_output_filename}}
 #'
 #' @export
-report_findings <- function(projectName, reportName, results, outDir, outDate = Sys.Date()) {
+report_findings <- function(projectName, reportName, results, previousReportDate, outDir, outDate = Sys.Date()) {
   # build (and create) output folder
   outputPath <- sprintf("%s/%s", outDir, paste(outDate, reportName, sep = "_"))
   check_and_create_path(outputPath)
 
   # get previous reports
-  previousReportFolder <- get_previous_report_folder(projectName, reportName, outDate = outDate, outDir = outDir)
+  if (!is.null(previousReportDate)) {
+    previousReportFolder <- list(
+      folder_path = sprintf("%s/%s", outDir, paste(previousReportDate, reportName, sep = "_")),
+      date = previousReportDate
+    )
+    tryCatch(
+      {
+        if (!dir.exists(previousReportFolder$folder_path)) {
+          stop(sprintf("Previous report folder does not exist: %s", previousReportFolder$folder_path))
+        }
+      },
+      error = function(e) {
+        stop(sprintf("Error checking previous report folder: %s", e$message))
+      }
+    )
+  } else {
+    previousReportFolder <- get_previous_report_folder(projectName, reportName, outDate = outDate, outDir = outDir)
+  }
   # iterate over list of check results
   summaryResults <- do.call(
     rbind.data.frame,
@@ -580,8 +600,6 @@ report_findings <- function(projectName, reportName, results, outDir, outDate = 
     })
   )
   # compare with previous summary, if any
-  previousReportFolder <- get_previous_report_folder(projectName, reportName, outDate = outDate, outDir = outDir)
-
   if (!is.null(previousReportFolder)) {
     latestSummary <- build_output_filename(
       projectName = projectName,

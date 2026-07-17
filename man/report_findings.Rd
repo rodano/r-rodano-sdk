@@ -4,7 +4,7 @@
 \alias{report_findings}
 \title{Run all checks and produce a findings report with summary}
 \usage{
-report_findings(projectName, reportName, results, outDir, outDate = Sys.Date())
+report_findings(projectName, reportName, results, previousReportDate, outDir, outDate = Sys.Date())
 }
 \arguments{
 \item{projectName}{Character. Name of the project.}
@@ -15,6 +15,10 @@ report_findings(projectName, reportName, results, outDir, outDate = Sys.Date())
 \item{results}{A list of check results. Each element must be a list with
 \code{table_result} (data frame), \code{check_id} (character), and
 \code{description} (character).}
+
+\item{previousReportDate}{Date, or \code{NULL}. Date of the
+previous report to use for comparison. If \code{NULL} (default), the
+function will automatically search for the most recent previous report.}
 
 \item{outDir}{Character. Parent directory where the dated report folder
 will be created.}
