@@ -422,11 +422,14 @@ add_scope <- function(code, name, model, parentPk, urlBase, auth, criteria = NUL
 #'   dates of fields? (default: FALSE).
 #' @param scopePk Integer or NULL. Optional scope primary key to filter the
 #'   extract to a specific scope.
+#' @param as_character Logical. If TRUE, all columns are returned as character
+#'   strings without any type detection or conversion (default: FALSE).
+#'   This disables automatic type inference and overrides the guessMax parameter.
 #'
 #' @return A data frame containing the extracted table data.
 #'
 #' @export
-get_extract <- function(urlBase, auth, expName, maxAttempts = 5, guessMax = -1, includeModifDate = FALSE, scopePk = NULL) {
+get_extract <- function(urlBase, auth, expName, maxAttempts = 5, guessMax = -1, includeModifDate = FALSE, scopePk = NULL, as_character = FALSE) {
   expAddress <- sprintf(
     "%s/extracts?datasetModelIds=%s%s%s",
     urlBase,
@@ -461,12 +464,22 @@ get_extract <- function(urlBase, auth, expName, maxAttempts = 5, guessMax = -1, 
 
   # Throw error if still unsuccessful; extract content otherwise
   if (is.null(getRes) || getRes$status_code != 200) stop(sprintf("Extract retrieval at: %s failed after %i attempts.", expAddress, maxAttempts))
-  cont <- httr::content(getRes,
+  
+  # Build content retrieval arguments
+  content_args <- list(
     type = "text/csv",
     na = character(),
-    encoding = "UTF-8",
-    guess_max = guessMax
+    encoding = "UTF-8"
   )
+  
+  # If as_character is TRUE, read all columns as character; otherwise use guessMax
+  if (as_character) {
+    content_args$col_types <- readr::cols(.default = readr::col_character())
+  } else {
+    content_args$guess_max <- guessMax
+  }
+  
+  cont <- do.call(httr::content, c(list(x = getRes), content_args))
   df <- as.data.frame(cont)
 
   return(df)
@@ -558,6 +571,8 @@ get_available_parents <- function(urlBase, auth, childScopeModelId = "PATIENT", 
 #'   (default: -1). See \code{\link{get_extract}} for details.
 #' @param includeModifDate Logical. Should the export include modification
 #'   dates of fields? (default: FALSE).
+#' @param as_character Logical. If TRUE, all columns are returned as character
+#'   strings without any type detection or conversion (default: FALSE).
 #' @param showProgress Logical. Should a progress bar be displayed? (default: TRUE).
 #' @param continueOnError Logical. Should the download continue if a scope fails?
 #'   If TRUE, failed scopes are skipped with a warning. If FALSE, the function
@@ -568,7 +583,7 @@ get_available_parents <- function(urlBase, auth, childScopeModelId = "PATIENT", 
 #' @export
 get_extract_resilient <- function(urlBase, auth, expName, childScopeModelId = "PATIENT",
                                   maxAttempts = 5, guessMax = -1, includeModifDate = FALSE,
-                                  showProgress = TRUE, continueOnError = TRUE) {
+                                  as_character = FALSE, showProgress = TRUE, continueOnError = TRUE) {
   # Get list of parent scope PKs
   parent_pks <- get_available_parents(urlBase, auth, childScopeModelId, right = "READ", maxAttempts)
 
@@ -589,7 +604,8 @@ get_extract_resilient <- function(urlBase, auth, expName, childScopeModelId = "P
           maxAttempts = maxAttempts,
           guessMax = guessMax,
           includeModifDate = includeModifDate,
-          scopePk = scope_pk
+          scopePk = scope_pk,
+          as_character = as_character
         )
       },
       error = function(e) {
@@ -1019,18 +1035,27 @@ get_events <- function(urlBase, auth, maxAttempts = 5, scopeModelId = "PATIENT")
 #' @param urlBase Character. The base URL to the platform's API.
 #' @param auth An authentication object created by \code{\link{create_authentication}}.
 #' @param tableIds Character vector. Data table model IDs to retrieve.
-#' @param includeModifDate Logical. Should exports include modification dates?
+#' @param includeModifDate Logical. Should exports include modification dates of
+#'   fields? (default: FALSE).
+#' @param guessMax Integer. Number of rows to scan for column type inference
+#'   (default: -1). See \code{\link{get_extract}} for details on handling sparse
+#'   data with date columns.
+#' @param as_character Logical. If TRUE, all columns are returned as character
+#'   strings without any type detection or conversion (default: FALSE).
+#'   This disables automatic type inference and overrides the guessMax parameter.
 #'
-#' @return A named list of data frames, one for each table. List names
-#'   are the lowercase table IDs.
+#' @return A named list of data frames, one for each table. List names are the
+#'   lowercase table IDs (e.g., \code{list(table1 = df1, table2 = df2)}).
 #'
-#' @seealso \code{\link{get_extract}} for retrieving a single data table.
+#' @seealso
+#'   \code{\link{get_extract}} for retrieving a single data table,
+#'   \code{\link{get_extracts_resilient}} for resilient batch downloads.
 #'
 #' @export
-get_extracts <- function(urlBase, auth, tableIds, includeModifDate, guessMax = -1) {
+get_extracts <- function(urlBase, auth, tableIds, includeModifDate, guessMax = -1, as_character = FALSE) {
   # Get all exports
   data <- lapply(tableIds, function(datasetId) {
-    tempdf <- get_extract(urlBase, auth, datasetId, includeModifDate = includeModifDate, guessMax = guessMax)
+    tempdf <- get_extract(urlBase, auth, datasetId, includeModifDate = includeModifDate, guessMax = guessMax, as_character = as_character)
     return(tempdf)
   })
   # Format and return the list
@@ -1057,6 +1082,8 @@ get_extracts <- function(urlBase, auth, tableIds, includeModifDate, guessMax = -
 #' @param guessMax Integer. Number of rows to scan for column type inference
 #'   (default: -1). See \code{\link{get_extract}} for details on handling sparse
 #'   data with date columns.
+#' @param as_character Logical. If TRUE, all columns are returned as character
+#'   strings without any type detection or conversion (default: FALSE).
 #' @param showProgress Logical. Should a progress bar be displayed? (default: TRUE).
 #' @param continueOnError Logical. Should the download continue if a scope fails?
 #'   If TRUE, failed scopes are skipped with a warning for that table. If FALSE,
@@ -1082,7 +1109,7 @@ get_extracts <- function(urlBase, auth, tableIds, includeModifDate, guessMax = -
 #'
 #' @export
 get_extracts_resilient <- function(urlBase, auth, tableIds, childScopeModelId = "PATIENT",
-                                   includeModifDate = FALSE, guessMax = -1,
+                                   includeModifDate = FALSE, guessMax = -1, as_character = FALSE,
                                    showProgress = TRUE, continueOnError = TRUE) {
   # Get all exports using resilient method
   data <- lapply(tableIds, function(datasetId) {
@@ -1093,6 +1120,7 @@ get_extracts_resilient <- function(urlBase, auth, tableIds, childScopeModelId = 
       childScopeModelId = childScopeModelId,
       guessMax = guessMax,
       includeModifDate = includeModifDate,
+      as_character = as_character,
       showProgress = showProgress,
       continueOnError = continueOnError
     )
