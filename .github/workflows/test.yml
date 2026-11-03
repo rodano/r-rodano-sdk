@@ -1,0 +1,84 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    container:
+      image: rocker/r-ver:4.4.0
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            libxml2-dev \
+            libuv1-dev \
+            libfontconfig1-dev \
+            libharfbuzz-dev \
+            libfribidi-dev \
+            libfreetype6-dev \
+            libpng-dev \
+            libtiff5-dev \
+            libjpeg-dev
+      
+      - name: Install renv and restore packages
+        run: |
+          R -e "
+          
+          if (!require('renv')) install.packages('renv')
+          renv::lockfile_modify(repos = c(CRAN = 'https://packagemanager.posit.co/cran/latest')) |> renv::lockfile_write()
+          renv::restore(confirm = FALSE)
+          "
+      
+      - name: Install required test packages
+        run: |
+          R -e "
+          if (!require('testthat')) install.packages('testthat')
+          "
+      
+      - name: Create reports directory
+        run: mkdir -p reports
+      
+      #- name: Run linting
+      #   run: |
+      #     R --vanilla -e "if (require('lintr')) lintr::lint_package()" || true
+      
+      - name: Run tests
+        env:
+          RODANO_API_URL: ${{ vars.RODANO_API_URL }}
+          RODANO_EMAIL: ${{ vars.RODANO_EMAIL }}
+          RODANO_PASSWORD: ${{ secrets.RODANO_PASSWORD }}
+        run: |
+          R -e "
+          Sys.setenv(RODANO_API_URL = Sys.getenv('RODANO_API_URL'))
+          Sys.setenv(RODANO_EMAIL = Sys.getenv('RODANO_EMAIL'))
+          Sys.setenv(RODANO_PASSWORD = Sys.getenv('RODANO_PASSWORD'))
+          if (!require('testthat')) install.packages('testthat')
+          library(testthat)
+          test_local(reporter = 'progress')
+          "
+      
+      # - name: Upload test reports
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: test-reports
+      #     path: reports/
+      
+      # - name: Publish test results
+      #   if: always()
+      #   uses: EnricoMi/publish-unit-test-result-action@v2
+      #   with:
+      #     files: reports/test-results.xml
+      #     check_name: Test Results

@@ -37,7 +37,7 @@ get_test_big_dataset <- function() {
 
 # Get test report name for report tests
 get_test_report <- function() {
-  return("VISIT_STATUS")
+  return("ENROLLMENT_STATUS")
 }
 
 get_test_big_report <- function() {
