@@ -4,7 +4,14 @@
 \alias{report_findings}
 \title{Run all checks and produce a findings report with summary}
 \usage{
-report_findings(projectName, reportName, results, previousReportDate, outDir, outDate = Sys.Date())
+report_findings(
+  projectName,
+  reportName,
+  results,
+  previousReportDate,
+  outDir,
+  outDate = Sys.Date()
+)
 }
 \arguments{
 \item{projectName}{Character. Name of the project.}
