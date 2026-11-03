@@ -12,6 +12,7 @@ get_extract_resilient(
   maxAttempts = 5,
   guessMax = -1,
   includeModifDate = FALSE,
+  as_character = FALSE,
   showProgress = TRUE,
   continueOnError = TRUE
 )
@@ -35,6 +36,9 @@ chunked by CENTER parents where the user has write access.}
 
 \item{includeModifDate}{Logical. Should the export include modification
 dates of fields? (default: FALSE).}
+
+\item{as_character}{Logical. If TRUE, all columns are returned as character
+strings without any type detection or conversion (default: FALSE).}
 
 \item{showProgress}{Logical. Should a progress bar be displayed? (default: TRUE).}
 

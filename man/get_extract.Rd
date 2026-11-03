@@ -11,7 +11,8 @@ get_extract(
   maxAttempts = 5,
   guessMax = -1,
   includeModifDate = FALSE,
-  scopePk = NULL
+  scopePk = NULL,
+  as_character = FALSE
 )
 }
 \arguments{
@@ -42,6 +43,10 @@ dates of fields? (default: FALSE).}
 
 \item{scopePk}{Integer or NULL. Optional scope primary key to filter the
 extract to a specific scope.}
+
+\item{as_character}{Logical. If TRUE, all columns are returned as character
+strings without any type detection or conversion (default: FALSE).
+This disables automatic type inference and overrides the guessMax parameter.}
 }
 \value{
 A data frame containing the extracted table data.

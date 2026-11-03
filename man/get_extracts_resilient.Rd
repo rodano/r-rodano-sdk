@@ -11,6 +11,7 @@ get_extracts_resilient(
   childScopeModelId = "PATIENT",
   includeModifDate = FALSE,
   guessMax = -1,
+  as_character = FALSE,
   showProgress = TRUE,
   continueOnError = TRUE
 )
@@ -32,6 +33,9 @@ fields? (default: FALSE).}
 \item{guessMax}{Integer. Number of rows to scan for column type inference
 (default: -1). See \code{\link{get_extract}} for details on handling sparse
 data with date columns.}
+
+\item{as_character}{Logical. If TRUE, all columns are returned as character
+strings without any type detection or conversion (default: FALSE).}
 
 \item{showProgress}{Logical. Should a progress bar be displayed? (default: TRUE).}
 

@@ -4,7 +4,14 @@
 \alias{get_extracts}
 \title{Retrieve multiple data tables}
 \usage{
-get_extracts(urlBase, auth, tableIds, includeModifDate, guessMax = -1)
+get_extracts(
+  urlBase,
+  auth,
+  tableIds,
+  includeModifDate,
+  guessMax = -1,
+  as_character = FALSE
+)
 }
 \arguments{
 \item{urlBase}{Character. The base URL to the platform's API.}
@@ -13,11 +20,20 @@ get_extracts(urlBase, auth, tableIds, includeModifDate, guessMax = -1)
 
 \item{tableIds}{Character vector. Data table model IDs to retrieve.}
 
-\item{includeModifDate}{Logical. Should exports include modification dates?}
+\item{includeModifDate}{Logical. Should exports include modification dates of
+fields? (default: FALSE).}
+
+\item{guessMax}{Integer. Number of rows to scan for column type inference
+(default: -1). See \code{\link{get_extract}} for details on handling sparse
+data with date columns.}
+
+\item{as_character}{Logical. If TRUE, all columns are returned as character
+strings without any type detection or conversion (default: FALSE).
+This disables automatic type inference and overrides the guessMax parameter.}
 }
 \value{
-A named list of data frames, one for each table. List names
-  are the lowercase table IDs.
+A named list of data frames, one for each table. List names are the
+  lowercase table IDs (e.g., \code{list(table1 = df1, table2 = df2)}).
 }
 \description{
 Retrieves data from multiple tables on the server in a batch operation using
@@ -25,5 +41,6 @@ Retrieves data from multiple tables on the server in a batch operation using
 data frame from one table.
 }
 \seealso{
-\code{\link{get_extract}} for retrieving a single data table.
+\code{\link{get_extract}} for retrieving a single data table,
+  \code{\link{get_extracts_resilient}} for resilient batch downloads.
 }
