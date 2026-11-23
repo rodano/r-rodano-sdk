@@ -10,6 +10,7 @@ export(get_center_on_date)
 export(get_check_details_discrepancy)
 export(get_closest_event)
 export(get_config)
+export(get_connected_user_dto)
 export(get_connection_robot)
 export(get_connection_token)
 export(get_events)
@@ -42,16 +43,20 @@ export(update_edc)
 export(update_edc_multiple)
 export(update_wf)
 importFrom(getPass,getPass)
-importFrom(httr,DELETE)
-importFrom(httr,GET)
-importFrom(httr,POST)
-importFrom(httr,PUT)
-importFrom(httr,add_headers)
-importFrom(httr,authenticate)
-importFrom(httr,content)
-importFrom(httr,http_status)
-importFrom(pbapply,pbapply)
-importFrom(pbapply,pbmapply)
-importFrom(pbapply,pboptions)
-importFrom(pbapply,pbsapply)
+importFrom(httr,
+  DELETE,
+  GET,
+  POST,
+  PUT,
+  add_headers,
+  authenticate,
+  content,
+  http_status
+)
+importFrom(pbapply,
+  pbapply,
+  pbmapply,
+  pboptions,
+  pbsapply
+)
 importFrom(uuid,UUIDgenerate)

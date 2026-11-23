@@ -127,8 +127,7 @@ create_authentication <- function(opt) {
 #'
 #' @return A User DTO object containing user information and permissions.
 #'
-#' @keywords internal
-#' @noRd
+#' @export
 get_connected_user_dto <- function(urlBase, auth) {
   resp <- httr::GET(
     url = sprintf("%s/me", urlBase),
