@@ -51,7 +51,8 @@ jobs:
         run: mkdir -p reports
 
       - name: Install package
-        run: R CMD INSTALL --no-multiarch --with-keep.source .
+        run: |
+          R -e "renv::install('.', rebuild = TRUE, dependencies = FALSE, prompt = FALSE)"
       
       #- name: Run linting
       #   run: |
