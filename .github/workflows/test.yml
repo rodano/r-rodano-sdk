@@ -49,6 +49,9 @@ jobs:
       
       - name: Create reports directory
         run: mkdir -p reports
+
+      - name: Install package
+        run: R CMD INSTALL --no-multiarch --with-keep.source .
       
       #- name: Run linting
       #   run: |
@@ -66,7 +69,7 @@ jobs:
           Sys.setenv(RODANO_PASSWORD = Sys.getenv('RODANO_PASSWORD'))
           if (!require('testthat')) install.packages('testthat')
           library(testthat)
-          test_local(reporter = 'progress')
+          test_local(reporter = 'progress', load_package = 'installed')
           "
       
       # - name: Upload test reports
