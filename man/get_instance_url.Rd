@@ -16,7 +16,8 @@ File must have columns: Study, Environment, and Address.}
 "validation", "production").}
 }
 \value{
-Character. The API base URL for the specified study and environment.
+Character. The API base URL for the specified study and environment,
+  or \code{NULL} with a warning if no matching instance exists.
 }
 \description{
 Retrieves the API URL for a requested study platform from a configuration

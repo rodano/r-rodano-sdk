@@ -12,7 +12,8 @@ logout_user(urlBase, auth)
 \item{auth}{An authentication object created by \code{\link{create_authentication}}.}
 }
 \value{
-Called for its side effect. Throws an error if logout fails.
+Invisibly \code{TRUE} on success or \code{FALSE} with a warning if
+  logout fails.
 }
 \description{
 Deletes a user's session on the platform, invalidating the current

@@ -18,8 +18,8 @@ get_reports(urlBase, auth, reportIds, maxAttempts = 5, withHistory = FALSE)
 \item{withHistory}{Logical. Should reports include historical data?}
 }
 \value{
-A named list of data frames containing the workflow reports. List
-  names are the lowercase report IDs.
+A named list, with one data frame per successfully retrieved report
+  and \code{NULL} for failed reports. List names are the lowercase IDs.
 }
 \description{
 Retrieves multiple workflow reports from the server in a batch operation using

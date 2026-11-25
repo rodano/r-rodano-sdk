@@ -33,6 +33,56 @@ get_test_auth <- function() {
 }
 
 # ============================================================================
+# Unit tests for soft API failures
+# ============================================================================
+
+test_that("get_connected_user_dto returns NULL for an unsuccessful response", {
+  api_base <- "mock-api"
+  local_mocked_bindings(
+    GET = function(...) list(status_code = 401),
+    .package = "httr"
+  )
+
+  expect_warning(
+    result <- get_connected_user_dto(api_base, NULL),
+    "Connected user retrieval failed"
+  )
+  expect_null(result)
+})
+
+test_that("get_connected_user_dto returns the DTO for a successful response", {
+  api_base <- "mock-api"
+  local_mocked_bindings(
+    GET = function(...) list(status_code = 200),
+    content = function(...) list(name = "Test user"),
+    .package = "httr"
+  )
+
+  result <- get_connected_user_dto(api_base, NULL)
+
+  expect_equal(result$name, "Test user")
+})
+
+test_that("get_extract returns NULL after retryable request failures", {
+  api_base <- "mock-api"
+  local_mocked_bindings(
+    GET = function(...) list(status_code = 503),
+    .package = "httr"
+  )
+
+  expect_warning(
+    result <- get_extract(
+      api_base,
+      NULL,
+      "TEST_DATASET",
+      maxAttempts = 2
+    ),
+    "Extract retrieval failed"
+  )
+  expect_null(result)
+})
+
+# ============================================================================
 # Tests for get_extract
 # ============================================================================
 
@@ -72,17 +122,18 @@ test_that("get_extract works with includeModifDate parameter", {
   expect_s3_class(result, "data.frame")
 })
 
-test_that("get_extract throws error for invalid dataset", {
+test_that("get_extract returns NULL for an invalid dataset", {
   conn <- get_test_auth()
 
-  expect_error(
-    get_extract(
+  expect_warning(
+    result <- get_extract(
       urlBase = conn$urlBase,
       auth = conn$auth,
       expName = "NONEXISTENT_DATASET_XYZ123",
       maxAttempts = 1
     )
   )
+  expect_null(result)
 })
 
 # ============================================================================
@@ -194,12 +245,11 @@ test_that("get_extract_resilient returns combined data from multiple scopes", {
   }
 })
 
-test_that("get_extract_resilient fails appropriately when no parent scopes found", {
+test_that("get_extract_resilient returns NULL when no parent scopes are found", {
   conn <- get_test_auth()
 
-  # Test with an invalid childScopeModelId that has no parent scopes
-  expect_error(
-    get_extract_resilient(
+  expect_warning(
+    result <- get_extract_resilient(
       urlBase = conn$urlBase,
       auth = conn$auth,
       expName = get_test_big_dataset(),
@@ -207,8 +257,9 @@ test_that("get_extract_resilient fails appropriately when no parent scopes found
       showProgress = FALSE,
       maxAttempts = 1
     ),
-    regexp = "No parent scopes found|failed"
+    regexp = "No parent scopes found|could not be retrieved"
   )
+  expect_null(result)
 })
 
 # ============================================================================
@@ -269,17 +320,18 @@ test_that("get_report works with custom scopePk", {
   expect_s3_class(result, "data.frame")
 })
 
-test_that("get_report throws error for invalid report name", {
+test_that("get_report returns NULL for an invalid report name", {
   conn <- get_test_auth()
 
-  expect_error(
-    get_report(
+  expect_warning(
+    result <- get_report(
       urlBase = conn$urlBase,
       auth = conn$auth,
       repName = "NONEXISTENT_REPORT_XYZ123",
       maxAttempts = 1
     )
   )
+  expect_null(result)
 })
 
 # ============================================================================
@@ -391,12 +443,11 @@ test_that("get_report_resilient returns combined data from multiple scopes", {
   }
 })
 
-test_that("get_report_resilient fails appropriately when no parent scopes found", {
+test_that("get_report_resilient returns NULL when no parent scopes are found", {
   conn <- get_test_auth()
 
-  # Test with an invalid childScopeModelId that has no parent scopes
-  expect_error(
-    get_report_resilient(
+  expect_warning(
+    result <- get_report_resilient(
       urlBase = conn$urlBase,
       auth = conn$auth,
       repName = get_test_big_report(),
@@ -404,6 +455,7 @@ test_that("get_report_resilient fails appropriately when no parent scopes found"
       showProgress = FALSE,
       maxAttempts = 1
     ),
-    regexp = "No parent scopes found|failed"
+    regexp = "No parent scopes found|could not be retrieved"
   )
+  expect_null(result)
 })

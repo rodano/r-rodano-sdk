@@ -44,8 +44,8 @@ If TRUE, failed scopes are skipped with a warning for that table. If FALSE,
 the function stops on the first error (default: TRUE).}
 }
 \value{
-A named list of data frames, one for each table. List names are the
-  lowercase table IDs (e.g., \code{list(table1 = df1, table2 = df2)}).
+A named list, with one data frame per successfully retrieved table
+  and \code{NULL} for failed tables. List names are the lowercase table IDs.
 }
 \description{
 Retrieves data from multiple tables on the server in a batch operation using

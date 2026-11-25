@@ -20,7 +20,8 @@ failure (default: 5).}
 (default: -1). See \code{\link{get_extract}} for details.}
 }
 \value{
-A data frame containing the widget data.
+A data frame containing the widget data, or \code{NULL} with a
+  warning if retrieval fails.
 }
 \description{
 Retrieves workflow widget data from the platform as a CSV export.

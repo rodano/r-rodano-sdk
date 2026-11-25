@@ -18,8 +18,8 @@ failure (default: 5).}
 transfers (default: "PATIENT").}
 }
 \value{
-A data frame containing the transfer records with columns for
-  patient identifiers, start/stop dates, and scope information.
+A data frame containing the transfer records, or \code{NULL} with a
+  warning if retrieval fails.
 }
 \description{
 Retrieves the patient transfer history from the platform. Transfers

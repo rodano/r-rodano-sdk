@@ -34,7 +34,8 @@ data? (default: FALSE).}
 report to a specific scope (default: 1).}
 }
 \value{
-A data frame containing the workflow report.
+A data frame containing the workflow report, or \code{NULL} with a
+  warning if retrieval fails.
 }
 \description{
 Retrieves workflow summary details from the platform as a CSV export.

@@ -18,8 +18,8 @@ failure (default: 5).}
 events (default: "PATIENT").}
 }
 \value{
-A data frame containing the event records with columns for event
-  identifiers, dates, scope information, and event details.
+A data frame containing the event records, or \code{NULL} with a
+  warning if retrieval fails.
 }
 \description{
 Retrieves the event export file from the platform. Events represent

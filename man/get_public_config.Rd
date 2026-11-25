@@ -13,7 +13,8 @@ get_public_config(urlBase, maxAttempts = 5)
 failure (default: 5).}
 }
 \value{
-A nested list containing the study's public configuration settings.
+A nested list containing the study's public configuration settings,
+  or \code{NULL} with a warning if retrieval fails.
 }
 \description{
 Extracts the public study configuration from the platform. This endpoint

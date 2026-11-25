@@ -49,7 +49,8 @@ strings without any type detection or conversion (default: FALSE).
 This disables automatic type inference and overrides the guessMax parameter.}
 }
 \value{
-A data frame containing the extracted table data.
+A data frame containing the extracted table data, or \code{NULL}
+  with a warning if retrieval fails.
 }
 \description{
 Retrieves a CSV data export for a specified table from the platform API

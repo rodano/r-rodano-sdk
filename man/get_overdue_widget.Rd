@@ -26,7 +26,8 @@ failure (default: 5).}
 (default: -1). See \code{\link{get_extract}} for details.}
 }
 \value{
-A data frame containing the overdue report data.
+A data frame containing the overdue report data, or \code{NULL}
+  with a warning if retrieval fails.
 }
 \description{
 Downloads the overdue report widget data from the platform. This report

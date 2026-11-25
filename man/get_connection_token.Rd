@@ -16,7 +16,8 @@ prompts the user for input.}
 prompts the user for secure input.}
 }
 \value{
-A character string containing the authentication token.
+A character string containing the authentication token, or
+  \code{NULL} with a warning if login fails.
 }
 \description{
 Retrieves an authentication token for a given platform using specific

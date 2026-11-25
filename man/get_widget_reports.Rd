@@ -14,8 +14,8 @@ get_widget_reports(urlBase, auth, widgetIds)
 \item{widgetIds}{Character vector. Widget names to retrieve.}
 }
 \value{
-A named list of data frames containing the widget reports. List
-  names are the lowercase widget IDs.
+A named list, with one data frame per successfully retrieved widget
+  report and \code{NULL} for failed reports. List names are the lowercase IDs.
 }
 \description{
 Retrieves multiple widget reports from the server in a batch operation using

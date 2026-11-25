@@ -5,6 +5,56 @@
 #' @importFrom getPass getPass
 NULL
 
+.get_with_retries <- function(url, auth = NULL, maxAttempts = 5, operation = "Request") {
+  maxAttempts <- suppressWarnings(as.integer(maxAttempts)[1])
+  if (is.na(maxAttempts) || maxAttempts < 1) {
+    warning(sprintf("%s failed: maxAttempts must be a positive integer.", operation))
+    return(NULL)
+  }
+
+  last_response <- NULL
+  last_error <- NULL
+
+  for (attempt in seq_len(maxAttempts)) {
+    last_error <- NULL
+    request <- list(url = url)
+    if (!is.null(auth)) {
+      request$config <- auth
+    }
+
+    last_response <- tryCatch(
+      do.call(httr::GET, request),
+      error = function(e) {
+        last_error <<- conditionMessage(e)
+        NULL
+      }
+    )
+
+    if (!is.null(last_response) && last_response$status_code == 200) {
+      return(last_response)
+    }
+  }
+
+  detail <- if (!is.null(last_error)) {
+    sprintf(" Last error: %s", last_error)
+  } else if (!is.null(last_response)) {
+    sprintf(" Last HTTP status: %i.", last_response$status_code)
+  } else {
+    ""
+  }
+
+  warning(sprintf(
+    "%s failed at %s after %i attempt%s.%s",
+    operation,
+    url,
+    maxAttempts,
+    if (maxAttempts == 1) "" else "s",
+    detail
+  ), call. = FALSE)
+
+  NULL
+}
+
 #############################
 ### Connection and robots ###
 #############################
@@ -20,24 +70,40 @@ NULL
 #' @param pwd Character or NULL. The password used for login. If NULL,
 #'   prompts the user for secure input.
 #'
-#' @return A character string containing the authentication token.
+#' @return A character string containing the authentication token, or
+#'   \code{NULL} with a warning if login fails.
 #'
 #' @export
 get_connection_token <- function(urlBase, email = NULL, pwd = NULL) {
   if (is.null(email)) email <- readline(prompt = "Please enter e-mail: ")
   if (is.null(pwd)) pwd <- getPass::getPass(msg = "Enter password: ")
 
-  resp <- httr::POST(
-    url = sprintf("%s/sessions", urlBase),
-    body = list(email = email, password = pwd),
-    encode = "json"
+  resp <- tryCatch(
+    httr::POST(
+      url = sprintf("%s/sessions", urlBase),
+      body = list(email = email, password = pwd),
+      encode = "json"
+    ),
+    error = function(e) {
+      warning(sprintf("Login request failed: %s", conditionMessage(e)), call. = FALSE)
+      NULL
+    }
   )
-  if (resp$status_code == 201) {
-    token <- as.character(httr::content(resp)$token)
-  } else {
-    stop(sprintf("Failed to login %s. Please check your credentials.", email), call. = FALSE)
+
+  if (is.null(resp)) {
+    return(NULL)
   }
-  return(token)
+
+  if (resp$status_code == 201) {
+    return(as.character(httr::content(resp)$token))
+  }
+
+  warning(sprintf(
+    "Failed to login %s (HTTP %i). Please check your credentials.",
+    email,
+    resp$status_code
+  ), call. = FALSE)
+  NULL
 }
 
 #' Retrieve robot credentials
@@ -53,22 +119,38 @@ get_connection_token <- function(urlBase, email = NULL, pwd = NULL) {
 #' @param autoLogout Logical. If TRUE, logs out the user used for robot
 #'   retrieval (default: FALSE).
 #'
-#' @return A JSON robot object containing robot credentials and configuration.
+#' @return A JSON robot object containing robot credentials and configuration,
+#'   or \code{NULL} with a warning if none can be retrieved.
 #'
 #' @export
 get_connection_robot <- function(urlBase, token, role = NULL, autoLogout = FALSE) {
   a_ <- create_authentication(list(Token = token))
-  resp <- httr::GET(
-    url = sprintf("%s/robots", urlBase),
-    config = a_
+  resp <- tryCatch(
+    httr::GET(
+      url = sprintf("%s/robots", urlBase),
+      config = a_
+    ),
+    error = function(e) {
+      warning(sprintf("Robot retrieval failed: %s", conditionMessage(e)), call. = FALSE)
+      NULL
+    }
   )
+
   if (autoLogout) logout_user(urlBase, a_)
+
+  if (is.null(resp)) {
+    return(NULL)
+  }
+
   if (resp$status_code == 200) {
     robots <- httr::content(resp, type = "application/json", encoding = "UTF-8")$objects # Get list of existing robots
     robots <- robots[sapply(robots, function(r) !r$removed)] # Retain only enabled robots
     if (!is.null(role)) robots <- robots[sapply(robots, function(r) r$roles[[1]]$profileId == role)] # Retain requested role
 
-    if (length(robots) == 0) stop(sprintf("No robots found on %s.", urlBase)) # Error if no robotos are found
+    if (length(robots) == 0) {
+      warning(sprintf("No robots found on %s.", urlBase), call. = FALSE)
+      return(NULL)
+    }
 
     if (length(robots) > 1) { # Let user choose if more than 1 robot was found or if user did not specify wanted role
       print("Please enter row of desired robot:")
@@ -92,7 +174,12 @@ get_connection_robot <- function(urlBase, token, role = NULL, autoLogout = FALSE
     return(robots[[1]])
   }
 
-  stop(sprintf("Robots could not be retrieved from %s.", urlBase))
+  warning(sprintf(
+    "Robots could not be retrieved from %s (HTTP %i).",
+    urlBase,
+    resp$status_code
+  ), call. = FALSE)
+  NULL
 }
 
 
@@ -120,30 +207,47 @@ create_authentication <- function(opt) {
 #' Retrieve connected user information
 #'
 #' Retrieves the User Data Transfer Object (DTO) for the currently
-#' authenticated user.
+#' authenticated user. Used to verify that authentication is active.
 #'
 #' @param urlBase Character. The base URL to the platform's API.
 #' @param auth An authentication object created by \code{\link{create_authentication}}.
 #'
-#' @return A User DTO object containing user information and permissions.
+#' @return A User DTO object containing user information and permissions on
+#'   success. Returns \code{NULL} with a warning on failure (connection error,
+#'   invalid credentials, etc.).
+#'
+#' @details
+#' This function is designed for checking connection status and does not stop
+#' execution on error. Instead, it returns \code{NULL} and issues a warning,
+#' allowing the caller to check connectivity without error handling overhead.
+#'
+#' @examples
+#' \dontrun{
+#' # Check if user is connected
+#' auth <- create_authentication(list(Token = "my_token"))
+#' user <- get_connected_user_dto("https://test.rodano.ch/api", auth)
+#'
+#' if (!is.null(user)) {
+#'   cat("Connected as:", user$name, "\n")
+#' } else {
+#'   cat("Not connected\n")
+#' }
+#' }
 #'
 #' @export
 get_connected_user_dto <- function(urlBase, auth) {
-  resp <- httr::GET(
-    url = sprintf("%s/me", urlBase),
-    config = auth,
-    encode = "json"
+  resp <- .get_with_retries(
+    sprintf("%s/me", urlBase),
+    auth = auth,
+    maxAttempts = 1,
+    operation = "Connected user retrieval"
   )
 
-  if (resp$status_code == 200) {
-    userDTO <- httr::content(resp,
-      encoding = "UTF-8"
-    )
-  } else {
-    stop(sprintf("Failed to get user data (%i)", resp$status_code))
+  if (is.null(resp)) {
+    return(NULL)
   }
 
-  return(userDTO)
+  httr::content(resp, encoding = "UTF-8")
 }
 
 #' Log out user session
@@ -154,16 +258,32 @@ get_connected_user_dto <- function(urlBase, auth) {
 #' @param urlBase Character. The base URL to the platform's API.
 #' @param auth An authentication object created by \code{\link{create_authentication}}.
 #'
-#' @return Called for its side effect. Throws an error if logout fails.
+#' @return Invisibly \code{TRUE} on success or \code{FALSE} with a warning if
+#'   logout fails.
 #'
 #' @export
 logout_user <- function(urlBase, auth) {
-  resp <- httr::DELETE(
-    url = sprintf("%s/sessions", urlBase),
-    config = auth
+  resp <- tryCatch(
+    httr::DELETE(
+      url = sprintf("%s/sessions", urlBase),
+      config = auth
+    ),
+    error = function(e) {
+      warning(sprintf("Logout request failed: %s", conditionMessage(e)), call. = FALSE)
+      NULL
+    }
   )
 
-  if (resp$status_code != 204) stop("Logout unsuccessful.")
+  if (is.null(resp)) {
+    return(invisible(FALSE))
+  }
+
+  if (resp$status_code == 204) {
+    return(invisible(TRUE))
+  }
+
+  warning(sprintf("Logout unsuccessful (HTTP %i).", resp$status_code), call. = FALSE)
+  invisible(FALSE)
 }
 
 ############################
@@ -180,38 +300,22 @@ logout_user <- function(urlBase, auth) {
 #' @param maxAttempts Integer. Maximum number of retry attempts in case of
 #'   failure (default: 5).
 #'
-#' @return A nested list containing the study's configuration settings.
+#' @return A nested list containing the study's configuration settings, or
+#'   \code{NULL} with a warning if retrieval fails.
 #'
 #' @export
 get_config <- function(urlBase, auth, maxAttempts = 5) {
   cfgAddress <- sprintf("%s/config/study", urlBase)
-
-  # Try max. [maxAttempts] times to retrieve requested report
-  attempts <- 0
-  success <- FALSE
-  getRes <- NULL
-  while (attempts < maxAttempts && !success) {
-    getRes <- tryCatch(
-      {
-        httr::GET(
-          url = cfgAddress,
-          config = auth
-        )
-      },
-      error = function(e) {
-        print(sprintf("Configuration retrieval at: %s failed. %s", cfgAddress, e))
-        return(NULL)
-      }
-    )
-    if (is.null(getRes) || getRes$status_code != 200) {
-      attempts <- attempts + 1
-    } else {
-      success <- TRUE
-    }
+  getRes <- .get_with_retries(
+    cfgAddress,
+    auth = auth,
+    maxAttempts = maxAttempts,
+    operation = "Configuration retrieval"
+  )
+  if (is.null(getRes)) {
+    return(NULL)
   }
 
-  # Throw error if still unsuccessful; extract content otherwise
-  if (getRes$status_code != 200) stop(sprintf("Configuration retrieval at: %s failed after %i attempts.", cfgAddress, maxAttempts))
   cont <- httr::content(getRes,
     type = "application/json",
     encoding = "UTF-8"
@@ -229,35 +333,21 @@ get_config <- function(urlBase, auth, maxAttempts = 5) {
 #' @param maxAttempts Integer. Maximum number of retry attempts in case of
 #'   failure (default: 5).
 #'
-#' @return A nested list containing the study's public configuration settings.
+#' @return A nested list containing the study's public configuration settings,
+#'   or \code{NULL} with a warning if retrieval fails.
 #'
 #' @export
 get_public_config <- function(urlBase, maxAttempts = 5) {
   cfgAddress <- sprintf("%s/config/public-study", urlBase)
-
-  # Try max. [maxAttempts] times to retrieve requested report
-  attempts <- 0
-  success <- FALSE
-  getRes <- NULL
-  while (attempts < maxAttempts && !success) {
-    getRes <- tryCatch(
-      {
-        httr::GET(url = cfgAddress)
-      },
-      error = function(e) {
-        print(sprintf("Configuration retrieval at: %s failed. %s", cfgAddress, e))
-        return(NULL)
-      }
-    )
-    if (is.null(getRes) || getRes$status_code != 200) {
-      attempts <- attempts + 1
-    } else {
-      success <- TRUE
-    }
+  getRes <- .get_with_retries(
+    cfgAddress,
+    maxAttempts = maxAttempts,
+    operation = "Public configuration retrieval"
+  )
+  if (is.null(getRes)) {
+    return(NULL)
   }
 
-  # Throw error if still unsuccessful; extract content otherwise
-  if (is.null(getRes) || getRes$status_code != 200) stop(sprintf("Configuration retrieval at: %s failed after %i attempts.", cfgAddress, maxAttempts))
   cont <- httr::content(getRes,
     type = "application/json",
     encoding = "UTF-8"
@@ -425,7 +515,8 @@ add_scope <- function(code, name, model, parentPk, urlBase, auth, criteria = NUL
 #'   strings without any type detection or conversion (default: FALSE).
 #'   This disables automatic type inference and overrides the guessMax parameter.
 #'
-#' @return A data frame containing the extracted table data.
+#' @return A data frame containing the extracted table data, or \code{NULL}
+#'   with a warning if retrieval fails.
 #'
 #' @export
 get_extract <- function(urlBase, auth, expName, maxAttempts = 5, guessMax = -1, includeModifDate = FALSE, scopePk = NULL, as_character = FALSE) {
@@ -437,33 +528,16 @@ get_extract <- function(urlBase, auth, expName, maxAttempts = 5, guessMax = -1, 
     ifelse(!is.null(scopePk), sprintf("&scopePk=%s", scopePk), "")
   )
 
-  # Try max. [maxAttempts] times to retrieve requested extract
-  attempts <- 0
-  success <- FALSE
-  getRes <- NULL
-  while (attempts < maxAttempts && !success) {
-    getRes <- tryCatch(
-      {
-        httr::GET(
-          url = expAddress,
-          config = auth
-        )
-      },
-      error = function(e) {
-        print(sprintf("Extract retrieval at: %s failed. %s", expAddress, e))
-        return(NULL)
-      }
-    )
-    if (is.null(getRes) || getRes$status_code != 200) {
-      attempts <- attempts + 1
-    } else {
-      success <- TRUE
-    }
+  getRes <- .get_with_retries(
+    expAddress,
+    auth = auth,
+    maxAttempts = maxAttempts,
+    operation = "Extract retrieval"
+  )
+  if (is.null(getRes)) {
+    return(NULL)
   }
 
-  # Throw error if still unsuccessful; extract content otherwise
-  if (is.null(getRes) || getRes$status_code != 200) stop(sprintf("Extract retrieval at: %s failed after %i attempts.", expAddress, maxAttempts))
-  
   # Build content retrieval arguments
   content_args <- list(
     type = "text/csv",
@@ -496,34 +570,14 @@ get_available_parents <- function(urlBase, auth, childScopeModelId = "PATIENT", 
     childScopeModelId
   )
 
-  # Try max. [maxAttempts] times to retrieve parent scope list
-  attempts <- 0
-  success <- FALSE
-  getRes <- NULL
-  while (attempts < maxAttempts && !success) {
-    getRes <- tryCatch(
-      {
-        httr::GET(
-          url = scopeAddress,
-          config = auth
-        )
-      },
-      error = function(e) {
-        print(sprintf("Parent scope list retrieval at: %s failed. %s", scopeAddress, e))
-        return(NULL)
-      }
-    )
-
-    if (is.null(getRes) || getRes$status_code != 200) {
-      attempts <- attempts + 1
-    } else {
-      success <- TRUE
-    }
-  }
-
-  # Throw error if still unsuccessful
-  if (!success || getRes$status_code != 200) {
-    stop(sprintf("Parent scope list retrieval at: %s failed after %i attempts.", scopeAddress, maxAttempts))
+  getRes <- .get_with_retries(
+    scopeAddress,
+    auth = auth,
+    maxAttempts = maxAttempts,
+    operation = "Parent scope list retrieval"
+  )
+  if (is.null(getRes)) {
+    return(NULL)
   }
 
   # Parse JSON response
@@ -577,7 +631,8 @@ get_available_parents <- function(urlBase, auth, childScopeModelId = "PATIENT", 
 #'   If TRUE, failed scopes are skipped with a warning. If FALSE, the function
 #'   stops on the first error (default: TRUE).
 #'
-#' @return A data frame containing the extracted table data from all parent scopes.
+#' @return A data frame containing the extracted table data from all parent
+#'   scopes, or \code{NULL} with a warning if no data can be retrieved.
 #'
 #' @export
 get_extract_resilient <- function(urlBase, auth, expName, childScopeModelId = "PATIENT",
@@ -586,37 +641,48 @@ get_extract_resilient <- function(urlBase, auth, expName, childScopeModelId = "P
   # Get list of parent scope PKs
   parent_pks <- get_available_parents(urlBase, auth, childScopeModelId, right = "READ", maxAttempts)
 
+  if (is.null(parent_pks)) {
+    warning("Cannot perform resilient download because parent scopes could not be retrieved.", call. = FALSE)
+    return(NULL)
+  }
+
   if (length(parent_pks) == 0) {
-    stop("No parent scopes found. Cannot perform resilient download.")
+    warning("No parent scopes found. Cannot perform resilient download.", call. = FALSE)
+    return(NULL)
   }
 
   message(sprintf("Starting resilient download for %d parent scopes...", length(parent_pks)))
 
   # Function to download data for a single parent scope
   download_for_scope <- function(scope_pk) {
-    tryCatch(
-      {
-        get_extract(
-          urlBase = urlBase,
-          auth = auth,
-          expName = expName,
-          maxAttempts = maxAttempts,
-          guessMax = guessMax,
-          includeModifDate = includeModifDate,
-          scopePk = scope_pk,
-          as_character = as_character
-        )
-      },
+    data <- tryCatch(
+      get_extract(
+        urlBase = urlBase,
+        auth = auth,
+        expName = expName,
+        maxAttempts = maxAttempts,
+        guessMax = guessMax,
+        includeModifDate = includeModifDate,
+        scopePk = scope_pk,
+        as_character = as_character
+      ),
       error = function(e) {
-        msg <- sprintf("Failed to download data for scope PK %s: %s", scope_pk, e$message)
-        if (continueOnError) {
-          warning(msg)
-          return(NULL)
-        } else {
-          stop(msg)
-        }
+        warning(
+          sprintf("Failed to download data for scope PK %s: %s", scope_pk, conditionMessage(e)),
+          call. = FALSE
+        )
+        NULL
       }
     )
+
+    if (is.null(data)) {
+      if (!continueOnError) {
+        stop(sprintf("Failed to download data for scope PK %s.", scope_pk), call. = FALSE)
+      }
+      return(NULL)
+    }
+
+    data
   }
 
   # Download data for each parent scope with optional progress bar
@@ -630,7 +696,8 @@ get_extract_resilient <- function(urlBase, auth, expName, childScopeModelId = "P
   results_list <- results_list[!sapply(results_list, is.null)]
 
   if (length(results_list) == 0) {
-    stop("All scope downloads failed. No data retrieved.")
+    warning("All scope downloads failed. No data retrieved.", call. = FALSE)
+    return(NULL)
   }
 
   # Combine all data frames
@@ -664,38 +731,23 @@ get_extract_resilient <- function(urlBase, auth, expName, childScopeModelId = "P
 #' @param scopePk Integer. Optional scope primary key to filter the
 #'   report to a specific scope (default: 1).
 #'
-#' @return A data frame containing the workflow report.
+#' @return A data frame containing the workflow report, or \code{NULL} with a
+#'   warning if retrieval fails.
 #'
 #' @export
 get_report <- function(urlBase, auth, repName, maxAttempts = 5, guessMax = -1, withHistory = FALSE, scopePk = 1) {
   repAddress <- sprintf("%s/widget/workflow-summary/%s/export%s?scopePk=%s", urlBase, repName, ifelse(withHistory, "/history", ""), scopePk)
 
-  # Try max. [maxAttempts] times to retrieve requested report
-  attempts <- 0
-  success <- FALSE
-  getRes <- NULL
-  while (attempts < maxAttempts && !success) {
-    getRes <- tryCatch(
-      {
-        httr::GET(
-          url = repAddress,
-          config = auth
-        )
-      },
-      error = function(e) {
-        print(sprintf("Report retrieval at: %s failed. %s", repAddress, e))
-        return(NULL)
-      }
-    )
-    if (is.null(getRes) || getRes$status_code != 200) {
-      attempts <- attempts + 1
-    } else {
-      success <- TRUE
-    }
+  getRes <- .get_with_retries(
+    repAddress,
+    auth = auth,
+    maxAttempts = maxAttempts,
+    operation = "Report retrieval"
+  )
+  if (is.null(getRes)) {
+    return(NULL)
   }
 
-  # Throw error if still unsuccessful; extract content otherwise
-  if (is.null(getRes) || getRes$status_code != 200) stop(sprintf("Report retrieval at: %s failed after %i attempts.", repAddress, maxAttempts))
   cont <- httr::content(getRes,
     type = "text/csv",
     na = character(),
@@ -732,7 +784,8 @@ get_report <- function(urlBase, auth, repName, maxAttempts = 5, guessMax = -1, w
 #'   If TRUE, failed scopes are skipped with a warning. If FALSE, the function
 #'   stops on the first error (default: TRUE).
 #'
-#' @return A data frame containing the workflow report data from all parent scopes.
+#' @return A data frame containing the workflow report data from all parent
+#'   scopes, or \code{NULL} with a warning if no data can be retrieved.
 #'
 #' @seealso \code{\link{get_report}} for retrieving a single workflow report.
 #'
@@ -743,36 +796,47 @@ get_report_resilient <- function(urlBase, auth, repName, childScopeModelId = "PA
   # Get list of parent scope PKs
   parent_pks <- get_available_parents(urlBase, auth, childScopeModelId, right = "READ", maxAttempts)
 
+  if (is.null(parent_pks)) {
+    warning("Cannot perform resilient download because parent scopes could not be retrieved.", call. = FALSE)
+    return(NULL)
+  }
+
   if (length(parent_pks) == 0) {
-    stop("No parent scopes found. Cannot perform resilient download.")
+    warning("No parent scopes found. Cannot perform resilient download.", call. = FALSE)
+    return(NULL)
   }
 
   message(sprintf("Starting resilient download for %d parent scopes...", length(parent_pks)))
 
   # Function to download report for a single parent scope
   download_for_scope <- function(scope_pk) {
-    tryCatch(
-      {
-        get_report(
-          urlBase = urlBase,
-          auth = auth,
-          repName = repName,
-          maxAttempts = maxAttempts,
-          guessMax = guessMax,
-          withHistory = withHistory,
-          scopePk = scope_pk
-        )
-      },
+    data <- tryCatch(
+      get_report(
+        urlBase = urlBase,
+        auth = auth,
+        repName = repName,
+        maxAttempts = maxAttempts,
+        guessMax = guessMax,
+        withHistory = withHistory,
+        scopePk = scope_pk
+      ),
       error = function(e) {
-        msg <- sprintf("Failed to download report for scope PK %s: %s", scope_pk, e$message)
-        if (continueOnError) {
-          warning(msg)
-          return(NULL)
-        } else {
-          stop(msg)
-        }
+        warning(
+          sprintf("Failed to download report for scope PK %s: %s", scope_pk, conditionMessage(e)),
+          call. = FALSE
+        )
+        NULL
       }
     )
+
+    if (is.null(data)) {
+      if (!continueOnError) {
+        stop(sprintf("Failed to download report for scope PK %s.", scope_pk), call. = FALSE)
+      }
+      return(NULL)
+    }
+
+    data
   }
 
   # Download report for each parent scope with optional progress bar
@@ -786,7 +850,8 @@ get_report_resilient <- function(urlBase, auth, repName, childScopeModelId = "PA
   results_list <- results_list[!sapply(results_list, is.null)]
 
   if (length(results_list) == 0) {
-    stop("All scope downloads failed. No data retrieved.")
+    warning("All scope downloads failed. No data retrieved.", call. = FALSE)
+    return(NULL)
   }
 
   # Combine all data frames
@@ -815,38 +880,23 @@ get_report_resilient <- function(urlBase, auth, repName, childScopeModelId = "PA
 #' @param guessMax Integer. Number of rows to scan for column type inference
 #'   (default: -1). See \code{\link{get_extract}} for details.
 #'
-#' @return A data frame containing the widget data.
+#' @return A data frame containing the widget data, or \code{NULL} with a
+#'   warning if retrieval fails.
 #'
 #' @export
 get_widget <- function(urlBase, auth, widName, maxAttempts = 5, guessMax = -1) {
   widAddress <- sprintf("%s/widget/workflow/%s/export?scopePks=1", urlBase, widName)
 
-  # Try max. [maxAttempts] times to retrieve requested report
-  attempts <- 0
-  success <- FALSE
-  getRes <- NULL
-  while (attempts < maxAttempts && !success) {
-    getRes <- tryCatch(
-      {
-        httr::GET(
-          url = widAddress,
-          config = auth
-        )
-      },
-      error = function(e) {
-        print(sprintf("Widget retrieval at: %s failed. %s", widAddress, e))
-        return(NULL)
-      }
-    )
-    if (is.null(getRes) || getRes$status_code != 200) {
-      attempts <- attempts + 1
-    } else {
-      success <- TRUE
-    }
+  getRes <- .get_with_retries(
+    widAddress,
+    auth = auth,
+    maxAttempts = maxAttempts,
+    operation = "Widget retrieval"
+  )
+  if (is.null(getRes)) {
+    return(NULL)
   }
 
-  # Throw error if still unsuccessful; extract content otherwise
-  if (is.null(getRes) || getRes$status_code != 200) stop(sprintf("Widget retrieval at: %s failed after %i attempts.", widAddress, maxAttempts))
   cont <- httr::content(getRes,
     type = "text/csv",
     na = character(),
@@ -871,35 +921,23 @@ get_widget <- function(urlBase, auth, widName, maxAttempts = 5, guessMax = -1) {
 #' @param guessMax Integer. Number of rows to scan for column type inference
 #'   (default: -1). See \code{\link{get_extract}} for details.
 #'
-#' @return A data frame containing the overdue report data.
+#' @return A data frame containing the overdue report data, or \code{NULL}
+#'   with a warning if retrieval fails.
 #'
 #' @export
 get_overdue_widget <- function(urlBase, auth, overdueWidName, maxAttempts = 5, guessMax = -1) {
   repAddress <- sprintf("%s/widget/overdue/%s/export", urlBase, overdueWidName)
 
-  attempts <- 0
-  success <- FALSE
-  while (attempts < maxAttempts && !success) {
-    getRes <- tryCatch(
-      {
-        httr::GET(
-          url = repAddress,
-          config = auth
-        )
-      },
-      error = function(e) {
-        print(sprintf("Overdue report retrieval at: %s failed. %s", repAddress, e))
-        return(NULL)
-      }
-    )
-    if (is.null(getRes) || getRes$status_code != 200) {
-      attempts <- attempts + 1
-    } else {
-      success <- TRUE
-    }
+  getRes <- .get_with_retries(
+    repAddress,
+    auth = auth,
+    maxAttempts = maxAttempts,
+    operation = "Overdue report retrieval"
+  )
+  if (is.null(getRes)) {
+    return(NULL)
   }
 
-  if (is.null(getRes) || getRes$status_code != 200) stop(sprintf("Overdue report retrieval at: %s failed after %i attempts.", repAddress, maxAttempts))
   cont <- httr::content(getRes,
     type = "text/csv",
     na = character(),
@@ -925,39 +963,23 @@ get_overdue_widget <- function(urlBase, auth, overdueWidName, maxAttempts = 5, g
 #' @param scopeModelId Character. ID of the scope model for which to extract
 #'   transfers (default: "PATIENT").
 #'
-#' @return A data frame containing the transfer records with columns for
-#'   patient identifiers, start/stop dates, and scope information.
+#' @return A data frame containing the transfer records, or \code{NULL} with a
+#'   warning if retrieval fails.
 #'
 #' @export
 get_transfers <- function(urlBase, auth, maxAttempts = 5, scopeModelId = "PATIENT") {
   trfAddress <- sprintf("%s/reports/transfers?scopeModelId=%s", urlBase, scopeModelId)
 
-  # Try max. [maxAttempts] times to retrieve requested report
-  attempts <- 0
-  success <- FALSE
-  getRes <- NULL
-  while (attempts < maxAttempts && !success) {
-    getRes <- tryCatch(
-      {
-        httr::GET(
-          url = trfAddress,
-          config = auth
-        )
-      },
-      error = function(e) {
-        print(sprintf("Transfers retrieval at: %s failed. %s", trfAddress, e))
-        return(NULL)
-      }
-    )
-    if (is.null(getRes) || getRes$status_code != 200) {
-      attempts <- attempts + 1
-    } else {
-      success <- TRUE
-    }
+  getRes <- .get_with_retries(
+    trfAddress,
+    auth = auth,
+    maxAttempts = maxAttempts,
+    operation = "Transfers retrieval"
+  )
+  if (is.null(getRes)) {
+    return(NULL)
   }
 
-  # Throw error if still unsuccessful; extract content otherwise
-  if (is.null(getRes) || getRes$status_code != 200) stop(sprintf("Transfers retrieval at: %s failed after %i attempts.", trfAddress, maxAttempts))
   df <- as.data.frame(httr::content(getRes,
     type = "text/csv",
     encoding = "UTF-8"
@@ -979,39 +1001,23 @@ get_transfers <- function(urlBase, auth, maxAttempts = 5, scopeModelId = "PATIEN
 #' @param scopeModelId Character. ID of the scope model for which to extract
 #'   events (default: "PATIENT").
 #'
-#' @return A data frame containing the event records with columns for event
-#'   identifiers, dates, scope information, and event details.
+#' @return A data frame containing the event records, or \code{NULL} with a
+#'   warning if retrieval fails.
 #'
 #' @export
 get_events <- function(urlBase, auth, maxAttempts = 5, scopeModelId = "PATIENT") {
   evtAddress <- sprintf("%s/reports/events?scopeModelId=%s", urlBase, scopeModelId)
 
-  # Try max. [maxAttempts] times to retrieve requested report
-  attempts <- 0
-  success <- FALSE
-  getRes <- NULL
-  while (attempts < maxAttempts && !success) {
-    getRes <- tryCatch(
-      {
-        httr::GET(
-          url = evtAddress,
-          config = auth
-        )
-      },
-      error = function(e) {
-        print(sprintf("Events retrieval at: %s failed. %s", evtAddress, e))
-        return(NULL)
-      }
-    )
-    if (is.null(getRes) || getRes$status_code != 200) {
-      attempts <- attempts + 1
-    } else {
-      success <- TRUE
-    }
+  getRes <- .get_with_retries(
+    evtAddress,
+    auth = auth,
+    maxAttempts = maxAttempts,
+    operation = "Events retrieval"
+  )
+  if (is.null(getRes)) {
+    return(NULL)
   }
 
-  # Throw error if still unsuccessful; extract content otherwise
-  if (is.null(getRes) || getRes$status_code != 200) stop(sprintf("Events retrieval at: %s failed after %i attempts.", evtAddress, maxAttempts))
   df <- as.data.frame(httr::content(getRes,
     type = "text/csv",
     encoding = "UTF-8"
@@ -1043,8 +1049,8 @@ get_events <- function(urlBase, auth, maxAttempts = 5, scopeModelId = "PATIENT")
 #'   strings without any type detection or conversion (default: FALSE).
 #'   This disables automatic type inference and overrides the guessMax parameter.
 #'
-#' @return A named list of data frames, one for each table. List names are the
-#'   lowercase table IDs (e.g., \code{list(table1 = df1, table2 = df2)}).
+#' @return A named list, with one data frame per successfully retrieved table
+#'   and \code{NULL} for failed tables. List names are the lowercase table IDs.
 #'
 #' @seealso
 #'   \code{\link{get_extract}} for retrieving a single data table,
@@ -1088,8 +1094,8 @@ get_extracts <- function(urlBase, auth, tableIds, includeModifDate, guessMax = -
 #'   If TRUE, failed scopes are skipped with a warning for that table. If FALSE,
 #'   the function stops on the first error (default: TRUE).
 #'
-#' @return A named list of data frames, one for each table. List names are the
-#'   lowercase table IDs (e.g., \code{list(table1 = df1, table2 = df2)}).
+#' @return A named list, with one data frame per successfully retrieved table
+#'   and \code{NULL} for failed tables. List names are the lowercase table IDs.
 #'
 #' @details
 #'   This function is particularly useful when:
@@ -1142,8 +1148,8 @@ get_extracts_resilient <- function(urlBase, auth, tableIds, childScopeModelId = 
 #' @param maxAttempts Integer. Maximum number of retry attempts in case of failure (default: 5).
 #' @param withHistory Logical. Should reports include historical data?
 #'
-#' @return A named list of data frames containing the workflow reports. List
-#'   names are the lowercase report IDs.
+#' @return A named list, with one data frame per successfully retrieved report
+#'   and \code{NULL} for failed reports. List names are the lowercase IDs.
 #'
 #' @seealso \code{\link{get_report}} for retrieving a single workflow report.
 #'
@@ -1169,8 +1175,8 @@ get_reports <- function(urlBase, auth, reportIds, maxAttempts = 5, withHistory =
 #' @param auth An authentication object created by \code{\link{create_authentication}}.
 #' @param widgetIds Character vector. Widget names to retrieve.
 #'
-#' @return A named list of data frames containing the widget reports. List
-#'   names are the lowercase widget IDs.
+#' @return A named list, with one data frame per successfully retrieved widget
+#'   report and \code{NULL} for failed reports. List names are the lowercase IDs.
 #'
 #' @seealso \code{\link{get_widget}} for retrieving a single widget report.
 #'
@@ -1196,8 +1202,8 @@ get_widget_reports <- function(urlBase, auth, widgetIds) {
 #' @param auth An authentication object created by \code{\link{create_authentication}}.
 #' @param widgetIds Character vector. Overdue widget names to retrieve.
 #'
-#' @return A named list of data frames containing the overdue widget reports.
-#'   List names are the lowercase widget IDs.
+#' @return A named list, with one data frame per successfully retrieved widget
+#'   report and \code{NULL} for failed reports. List names are the lowercase IDs.
 #'
 #' @seealso \code{\link{get_overdue_widget}} for retrieving a single overdue widget report.
 #'
@@ -1973,7 +1979,8 @@ update_wf <- function(df, urlBase, auth, verb = 0, scopeModel = "Patient") {
 #' @param studyEnv Character. Environment identifier (e.g., "local",
 #'   "validation", "production").
 #'
-#' @return Character. The API base URL for the specified study and environment.
+#' @return Character. The API base URL for the specified study and environment,
+#'   or \code{NULL} with a warning if no matching instance exists.
 #'
 #' @examples
 #' \dontrun{
@@ -2001,10 +2008,11 @@ get_instance_url <- function(filePath, studyName, studyEnv) {
     ))
   }
   if (length(url) == 0) {
-    stop(sprintf(
+    warning(sprintf(
       "No instance was found in file %s on study %s (environment %s).",
       filePath, studyName, studyEnv
-    ))
+    ), call. = FALSE)
+    return(NULL)
   }
 
   return(url)

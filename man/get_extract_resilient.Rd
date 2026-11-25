@@ -47,7 +47,8 @@ If TRUE, failed scopes are skipped with a warning. If FALSE, the function
 stops on the first error (default: TRUE).}
 }
 \value{
-A data frame containing the extracted table data from all parent scopes.
+A data frame containing the extracted table data from all parent
+  scopes, or \code{NULL} with a warning if no data can be retrieved.
 }
 \description{
 Retrieves a CSV data export by breaking the download into chunks based on

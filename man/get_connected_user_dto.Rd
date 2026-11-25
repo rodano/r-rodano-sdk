@@ -12,9 +12,30 @@ get_connected_user_dto(urlBase, auth)
 \item{auth}{An authentication object created by \code{\link{create_authentication}}.}
 }
 \value{
-A User DTO object containing user information and permissions.
+A User DTO object containing user information and permissions on
+  success. Returns \code{NULL} with a warning on failure (connection error,
+  invalid credentials, etc.).
 }
 \description{
 Retrieves the User Data Transfer Object (DTO) for the currently
-authenticated user.
+authenticated user. Used to verify that authentication is active.
+}
+\details{
+This function is designed for checking connection status and does not stop
+execution on error. Instead, it returns \code{NULL} and issues a warning,
+allowing the caller to check connectivity without error handling overhead.
+}
+\examples{
+\dontrun{
+# Check if user is connected
+auth <- create_authentication(list(Token = "my_token"))
+user <- get_connected_user_dto("https://test.rodano.ch/api", auth)
+
+if (!is.null(user)) {
+  cat("Connected as:", user$name, "\n")
+} else {
+  cat("Not connected\n")
+}
+}
+
 }

@@ -15,7 +15,8 @@ get_config(urlBase, auth, maxAttempts = 5)
 failure (default: 5).}
 }
 \value{
-A nested list containing the study's configuration settings.
+A nested list containing the study's configuration settings, or
+  \code{NULL} with a warning if retrieval fails.
 }
 \description{
 Extracts the complete study configuration from the platform. Includes

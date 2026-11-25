@@ -18,7 +18,8 @@ all robot roles are considered.}
 retrieval (default: FALSE).}
 }
 \value{
-A JSON robot object containing robot credentials and configuration.
+A JSON robot object containing robot credentials and configuration,
+  or \code{NULL} with a warning if none can be retrieved.
 }
 \description{
 Retrieves a robot account from a given platform. If multiple robots are

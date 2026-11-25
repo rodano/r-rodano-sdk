@@ -14,8 +14,8 @@ get_overdue_widget_reports(urlBase, auth, widgetIds)
 \item{widgetIds}{Character vector. Overdue widget names to retrieve.}
 }
 \value{
-A named list of data frames containing the overdue widget reports.
-  List names are the lowercase widget IDs.
+A named list, with one data frame per successfully retrieved widget
+  report and \code{NULL} for failed reports. List names are the lowercase IDs.
 }
 \description{
 Retrieves multiple overdue widget reports from the server in a batch
