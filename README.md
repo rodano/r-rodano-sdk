@@ -16,19 +16,37 @@ This section is for users who want to install and use the `rodano` package in th
 
 ### Installation
 
-Install the latest stable version of the package:
+Install [`pak`](https://pak.r-lib.org/) if it is not already available:
 
 ```r
-# Install devtools if not already installed
-if (!requireNamespace("devtools", quietly = TRUE)) {
-  install.packages("devtools")
+if (!requireNamespace("pak", quietly = TRUE)) {
+  install.packages("pak")
 }
+```
 
-# Install the rodano package from GitHub (or your package repository)
-devtools::install_github("rodano/r-rodano-sdk")
+Install the latest released version (recommended for most users):
 
-# Or from a local source directory
-devtools::install_local("path/to/r-rodano-sdk")
+```r
+pak::pak("github::rodano/r-rodano-sdk@*release")
+```
+
+To pin a project to a specific released version, use its `v`-prefixed tag:
+
+```r
+# Example: install release v1.5.0
+pak::pak("github::rodano/r-rodano-sdk@v1.5.0")
+```
+
+For the latest development version from the `dev` branch:
+
+```r
+pak::pak("github::rodano/r-rodano-sdk@dev")
+```
+
+Or install from a local source directory:
+
+```r
+pak::pak("local::path/to/r-rodano-sdk")
 ```
 
 ### Quick Start
@@ -183,6 +201,39 @@ devtools::test()
 
 # Or run specific test files
 testthat::test_file("R/tests/test_rodanoAPI_communication.R")
+```
+
+### Publishing a Package Release on GitHub
+
+This repository includes a GitHub Actions workflow that builds the package and attaches the generated `.tar.gz` file to a GitHub Release.
+
+- Trigger automatically: push a tag that starts with `v` (for example, `v1.0.0`)
+- Trigger manually: run the **Package Release** workflow from the Actions tab
+- On tag-triggered runs, the workflow validates that `DESCRIPTION` `Version:` matches the tag (for example, tag `v1.0.0` requires `Version: 1.0.0`)
+
+Example:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+### Publishing a Dev Package for Testing
+
+For testing, use the **Package Dev Build** workflow:
+
+- Trigger automatically on pushes to `dev`
+- Trigger manually from Actions (`workflow_dispatch`)
+- Always uploads a build artifact containing the `.tar.gz` package
+- Optionally publishes a GitHub pre-release on manual runs (`publish_prerelease: true`)
+- Enforces `DESCRIPTION` version format `x.y.z.9000` on every dev build
+
+Recommended dev version format in [DESCRIPTION](/home/jon/workspace/r-rodano-sdk/DESCRIPTION): `x.y.z.9000`
+
+To install the downloaded dev tarball locally:
+
+```r
+install.packages("rodano_<version>.tar.gz", repos = NULL, type = "source")
 ```
 
 ### Installing from Source

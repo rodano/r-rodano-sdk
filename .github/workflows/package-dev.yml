@@ -1,0 +1,84 @@
+name: Package Dev Build
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+    inputs:
+      publish_prerelease:
+        description: "Publish GitHub pre-release"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-dev-package:
+    runs-on: ubuntu-latest
+
+    container:
+      image: rocker/shiny:4.5.3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read package metadata
+        id: metadata
+        run: |
+          DESCRIPTION_VERSION="$(grep '^Version:' DESCRIPTION | sed 's/^Version:[[:space:]]*//')"
+          SHORT_SHA="$(printf '%s' "${GITHUB_SHA}" | cut -c1-7)"
+          RELEASE_TAG="dev-${GITHUB_RUN_NUMBER}-${SHORT_SHA}"
+
+          if [ -z "${DESCRIPTION_VERSION}" ]; then
+            echo "::error::Could not read Version from DESCRIPTION."
+            exit 1
+          fi
+
+          if ! printf '%s' "${DESCRIPTION_VERSION}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.9000$'; then
+            echo "::error::Dev builds require DESCRIPTION version format x.y.z.9000 (found: ${DESCRIPTION_VERSION})."
+            exit 1
+          fi
+
+          echo "description_version=${DESCRIPTION_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "release_tag=${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            libxml2-dev
+
+      - name: Install renv and restore packages
+        run: |
+          R -e "
+          if (!require('renv')) install.packages('renv')
+          renv::lockfile_modify(repos = c(CRAN = 'https://packagemanager.posit.co/cran/latest')) |> renv::lockfile_write()
+          renv::restore(confirm = FALSE)
+          "
+
+      - name: Build source package
+        run: |
+          mkdir -p dist
+          R CMD build . --no-build-vignettes --no-manual
+          mv ./*.tar.gz dist/
+
+      - name: Upload dev package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rodano-dev-package-${{ steps.metadata.outputs.description_version }}-${{ github.run_number }}
+          path: dist/*.tar.gz
+
+      - name: Publish GitHub pre-release
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.metadata.outputs.release_tag }}
+          name: Dev build ${{ steps.metadata.outputs.release_tag }}
+          prerelease: true
+          generate_release_notes: true
+          files: dist/*.tar.gz
