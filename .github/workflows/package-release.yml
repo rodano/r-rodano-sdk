@@ -44,7 +44,8 @@ jobs:
           apt-get install -y \
             libcurl4-openssl-dev \
             libssl-dev \
-            libxml2-dev
+            libxml2-dev \
+            libuv1-dev
 
       - name: Install renv and restore packages
         run: |
